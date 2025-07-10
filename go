@@ -26,7 +26,7 @@ if [ ! -f ".env.secret" ]; then
 # Database configuration - KEEP THIS FILE SECRET!
 MSSQL_SA_PASSWORD="${SA_RANDOM_PASSWORD}"
 MSSQL_RA_PASSWORD="${RA_RANDOM_PASSWORD}"
-CONNECTION_STRING="Server=rediacc-sql,1433;Database=RediaccMiddleware;User Id=rediacc;Password=${RA_RANDOM_PASSWORD};TrustServerCertificate=True;Application Name=RediaccMiddleware;Max Pool Size=32;Min Pool Size=2;Connection Lifetime=120;Connection Timeout=15;Command Timeout=30;Pooling=true;MultipleActiveResultSets=false;Packet Size=32768"
+CONNECTION_STRING="Server=sql,1433;Database=RediaccMiddleware;User Id=rediacc;Password=${RA_RANDOM_PASSWORD};TrustServerCertificate=True;Application Name=RediaccMiddleware;Max Pool Size=32;Min Pool Size=2;Connection Lifetime=120;Connection Timeout=15;Command Timeout=30;Pooling=true;MultipleActiveResultSets=false;Packet Size=32768"
 EOF
     
     echo -e "\e[32m.env.secret file created with random passwords.\e[0m"
@@ -36,14 +36,17 @@ fi
 # Source environment files and export for docker compose
 set -a  # automatically export all variables
 
-# First source .env to get base variables
-if [ -f ".env" ]; then
-    source .env
-fi
-
-# Source secret file
-if [ -f ".env.secret" ]; then
-    source .env.secret
+# Only source local files if not running as an instance
+if [ -z "$INSTANCE_NAME" ]; then
+    # Source .env to get base variables
+    if [ -f ".env" ]; then
+        source .env
+    fi
+    
+    # Source secret file
+    if [ -f ".env.secret" ]; then
+        source .env.secret
+    fi
 fi
 
 set +a  # stop auto-exporting
@@ -51,40 +54,81 @@ set +a  # stop auto-exporting
 # Function to start services
 up() {
     echo "Starting elite core services..."
-    docker compose up -d "$@"
+    
+    # Create networks if they don't exist
+    local network_prefix="${INSTANCE_NAME:-rediacc}"
+    docker network create ${network_prefix}_rediacc_internet 2>/dev/null || true
+    docker network create --internal ${network_prefix}_rediacc_intranet 2>/dev/null || true
+    
+    # Use project name from INSTANCE_NAME if set
+    if [ -n "$INSTANCE_NAME" ]; then
+        docker compose --project-name "$INSTANCE_NAME" up -d "$@"
+    else
+        docker compose up -d "$@"
+    fi
 }
 
 # Function to stop services
 down() {
     echo "Stopping elite core services..."
-    docker compose down "$@"
+    # Use project name from INSTANCE_NAME if set
+    if [ -n "$INSTANCE_NAME" ]; then
+        docker compose --project-name "$INSTANCE_NAME" down "$@"
+    else
+        docker compose down "$@"
+    fi
 }
 
 # Function to show logs
 logs() {
-    docker compose logs "$@"
+    # Use project name from INSTANCE_NAME if set
+    if [ -n "$INSTANCE_NAME" ]; then
+        docker compose --project-name "$INSTANCE_NAME" logs "$@"
+    else
+        docker compose logs "$@"
+    fi
 }
 
 # Function to show status
 status() {
-    docker compose ps
+    # Use project name from INSTANCE_NAME if set
+    if [ -n "$INSTANCE_NAME" ]; then
+        docker compose --project-name "$INSTANCE_NAME" ps
+    else
+        docker compose ps
+    fi
 }
 
 # Function to rebuild services
 build() {
     echo "Building elite core services..."
-    docker compose build "$@"
+    # Use project name from INSTANCE_NAME if set
+    if [ -n "$INSTANCE_NAME" ]; then
+        docker compose --project-name "$INSTANCE_NAME" build "$@"
+    else
+        docker compose build "$@"
+    fi
 }
 
 # Function to execute commands in containers
 exec() {
-    docker compose exec "$@"
+    # Use project name from INSTANCE_NAME if set
+    if [ -n "$INSTANCE_NAME" ]; then
+        docker compose --project-name "$INSTANCE_NAME" exec "$@"
+    else
+        docker compose exec "$@"
+    fi
 }
 
 # Function to restart services
 restart() {
     echo "Restarting elite core services..."
-    docker compose restart "$@"
+    # Use project name from INSTANCE_NAME if set
+    if [ -n "$INSTANCE_NAME" ]; then
+        docker compose --project-name "$INSTANCE_NAME" restart "$@"
+    else
+        docker compose restart "$@"
+    fi
 }
 
 # Function to show help
