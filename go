@@ -7,7 +7,7 @@ _generate_complex_password() {
     local upper=$(< /dev/urandom tr -dc 'A-Z' | head -c 32)
     local lower=$(< /dev/urandom tr -dc 'a-z' | head -c 32)
     local digits=$(< /dev/urandom tr -dc '0-9' | head -c 32)
-    local special=$(< /dev/urandom tr -dc '!@#%^&*()_+' | head -c 32)
+    local special=$(< /dev/urandom tr -dc '!@#$%^&*()_+-' | head -c 32)
     
     # Combine and shuffle
     echo "$upper$lower$digits$special" | fold -w1 | shuf | tr -d '\n'
@@ -26,7 +26,7 @@ if [ ! -f ".env.secret" ]; then
 # Database configuration - KEEP THIS FILE SECRET!
 MSSQL_SA_PASSWORD="${SA_RANDOM_PASSWORD}"
 MSSQL_RA_PASSWORD="${RA_RANDOM_PASSWORD}"
-CONNECTION_STRING="Server=sql,1433;Database=RediaccMiddleware;User Id=rediacc;Password=${RA_RANDOM_PASSWORD};TrustServerCertificate=True;Application Name=RediaccMiddleware;Max Pool Size=32;Min Pool Size=2;Connection Lifetime=120;Connection Timeout=15;Command Timeout=30;Pooling=true;MultipleActiveResultSets=false;Packet Size=32768"
+CONNECTION_STRING="Server=sql,1433;Database=RediaccMiddleware;User Id=rediacc;Password=\"${RA_RANDOM_PASSWORD}\";TrustServerCertificate=True;Application Name=RediaccMiddleware;Max Pool Size=32;Min Pool Size=2;Connection Lifetime=120;Connection Timeout=15;Command Timeout=30;Pooling=true;MultipleActiveResultSets=false;Packet Size=32768"
 EOF
     
     echo -e "\e[32m.env.secret file created with random passwords.\e[0m"
