@@ -3,14 +3,46 @@
 
 # Function to generate a complex password
 _generate_complex_password() {
-    # Ensure at least one of each: uppercase, lowercase, digit, special char
-    local upper=$(< /dev/urandom tr -dc 'A-Z' | head -c 32)
-    local lower=$(< /dev/urandom tr -dc 'a-z' | head -c 32)
-    local digits=$(< /dev/urandom tr -dc '0-9' | head -c 32)
-    local special=$(< /dev/urandom tr -dc '!@#$%^&*()_+-' | head -c 32)
+    # Generate a secure password with guaranteed character types
+    # Use openssl for reliable random generation
+    local length=128
+    local password=""
     
-    # Combine and shuffle
-    echo "$upper$lower$digits$special" | fold -w1 | shuf | tr -d '\n'
+    # Define safe character sets (avoiding shell/SQL special chars)
+    local chars_all="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#%^*()_+-="
+    
+    # Generate base password using openssl
+    while [ ${#password} -lt $length ]; do
+        # Generate random bytes and convert to base64, then filter for our allowed chars
+        local chunk=$(openssl rand -base64 48 | tr -d '/+=' | tr -cd "${chars_all}")
+        password="${password}${chunk}"
+    done
+    
+    # Trim to exact length
+    password="${password:0:$length}"
+    
+    # Ensure we have at least one of each required character type
+    local has_upper=$(echo "$password" | grep -q '[A-Z]' && echo 1 || echo 0)
+    local has_lower=$(echo "$password" | grep -q '[a-z]' && echo 1 || echo 0)
+    local has_digit=$(echo "$password" | grep -q '[0-9]' && echo 1 || echo 0)
+    local has_special=$(echo "$password" | grep -q '[!@#%^*()_+-=]' && echo 1 || echo 0)
+    
+    # If missing any required type, add them
+    if [ $has_upper -eq 0 ] || [ $has_lower -eq 0 ] || [ $has_digit -eq 0 ] || [ $has_special -eq 0 ]; then
+        # Add one of each missing type at random positions
+        local addon=""
+        [ $has_upper -eq 0 ] && addon="${addon}$(echo 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' | fold -w1 | shuf | head -1)"
+        [ $has_lower -eq 0 ] && addon="${addon}$(echo 'abcdefghijklmnopqrstuvwxyz' | fold -w1 | shuf | head -1)"
+        [ $has_digit -eq 0 ] && addon="${addon}$(echo '0123456789' | fold -w1 | shuf | head -1)"
+        [ $has_special -eq 0 ] && addon="${addon}$(echo '!@#%^*()_+-=' | fold -w1 | shuf | head -1)"
+        
+        # Replace random positions with the required characters
+        local addon_len=${#addon}
+        password="${addon}${password:$addon_len}"
+    fi
+    
+    # Final shuffle for good measure
+    echo "$password" | fold -w1 | shuf | tr -d '\n'
 }
 
 # Check if .env.secret file exists
