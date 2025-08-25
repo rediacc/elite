@@ -1,6 +1,19 @@
 #!/bin/bash
 # Docker Management Script for Elite Core Components
 
+# Helper function to run docker compose with appropriate files
+_docker_compose() {
+    local cmd="docker compose"
+    
+    # Add project name if instance name is set
+    if [ -n "$INSTANCE_NAME" ]; then
+        cmd="$cmd --project-name $INSTANCE_NAME"
+    fi
+    
+    # Execute with all passed arguments
+    $cmd "$@"
+}
+
 # Function to generate a complex password
 _generate_complex_password() {
     # Generate a secure password with guaranteed character types
@@ -92,75 +105,47 @@ up() {
     docker network create ${network_prefix}_rediacc_internet 2>/dev/null || true
     docker network create --internal ${network_prefix}_rediacc_intranet 2>/dev/null || true
     
-    # Use project name from INSTANCE_NAME if set
-    if [ -n "$INSTANCE_NAME" ]; then
-        docker compose --project-name "$INSTANCE_NAME" up -d "$@"
-    else
-        docker compose up -d "$@"
-    fi
+    # Start services using the helper function
+    _docker_compose up -d "$@"
 }
 
 # Function to stop services
 down() {
     echo "Stopping elite core services..."
-    # Use project name from INSTANCE_NAME if set
-    if [ -n "$INSTANCE_NAME" ]; then
-        docker compose --project-name "$INSTANCE_NAME" down "$@"
-    else
-        docker compose down "$@"
-    fi
+    # Stop services using the helper function
+    _docker_compose down "$@"
 }
 
 # Function to show logs
 logs() {
     # Use project name from INSTANCE_NAME if set
-    if [ -n "$INSTANCE_NAME" ]; then
-        docker compose --project-name "$INSTANCE_NAME" logs "$@"
-    else
-        docker compose logs "$@"
-    fi
+    _docker_compose logs "$@"
 }
 
 # Function to show status
 status() {
     # Use project name from INSTANCE_NAME if set
-    if [ -n "$INSTANCE_NAME" ]; then
-        docker compose --project-name "$INSTANCE_NAME" ps
-    else
-        docker compose ps
-    fi
+    _docker_compose ps
 }
 
 # Function to rebuild services
 build() {
     echo "Building elite core services..."
     # Use project name from INSTANCE_NAME if set
-    if [ -n "$INSTANCE_NAME" ]; then
-        docker compose --project-name "$INSTANCE_NAME" build "$@"
-    else
-        docker compose build "$@"
-    fi
+    _docker_compose build "$@"
 }
 
 # Function to execute commands in containers
 exec() {
     # Use project name from INSTANCE_NAME if set
-    if [ -n "$INSTANCE_NAME" ]; then
-        docker compose --project-name "$INSTANCE_NAME" exec "$@"
-    else
-        docker compose exec "$@"
-    fi
+    _docker_compose exec "$@"
 }
 
 # Function to restart services
 restart() {
     echo "Restarting elite core services..."
     # Use project name from INSTANCE_NAME if set
-    if [ -n "$INSTANCE_NAME" ]; then
-        docker compose --project-name "$INSTANCE_NAME" restart "$@"
-    else
-        docker compose restart "$@"
-    fi
+    _docker_compose restart "$@"
 }
 
 # Function to show help
