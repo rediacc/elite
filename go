@@ -66,12 +66,16 @@ if [ ! -f ".env.secret" ]; then
     SA_RANDOM_PASSWORD=$(_generate_complex_password)
     RA_RANDOM_PASSWORD=$(_generate_complex_password)
     
+    # Use REDIACC_DATABASE_NAME if set, otherwise default to RediaccMiddleware
+    DB_NAME="${REDIACC_DATABASE_NAME:-RediaccMiddleware}"
+    
     # Create .env.secret file with database passwords
     cat > .env.secret << EOF
 # Database configuration - KEEP THIS FILE SECRET!
 MSSQL_SA_PASSWORD="${SA_RANDOM_PASSWORD}"
 MSSQL_RA_PASSWORD="${RA_RANDOM_PASSWORD}"
-CONNECTION_STRING="Server=sql,1433;Database=RediaccMiddleware;User Id=rediacc;Password=\"${RA_RANDOM_PASSWORD}\";TrustServerCertificate=True;Application Name=RediaccMiddleware;Max Pool Size=32;Min Pool Size=2;Connection Lifetime=120;Connection Timeout=15;Command Timeout=30;Pooling=true;MultipleActiveResultSets=false;Packet Size=32768"
+REDIACC_DATABASE_NAME="${DB_NAME}"
+CONNECTION_STRING="Server=sql,1433;Database=${DB_NAME};User Id=rediacc;Password=\"${RA_RANDOM_PASSWORD}\";TrustServerCertificate=True;Application Name=${DB_NAME};Max Pool Size=32;Min Pool Size=2;Connection Lifetime=120;Connection Timeout=15;Command Timeout=30;Pooling=true;MultipleActiveResultSets=false;Packet Size=32768"
 EOF
     
     echo -e "\e[32m.env.secret file created with random passwords.\e[0m"
