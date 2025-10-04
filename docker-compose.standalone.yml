@@ -1,0 +1,12 @@
+# Docker Compose override for standalone mode
+# This file is automatically used when running elite independently (not via cloud instances)
+# Exposes ports to the host for direct access
+
+services:
+  nginx:
+    ports:
+      - "${HTTP_PORT:-80}:80"
+
+  sql:
+    ports:
+      - "${SQL_PORT:-1433}:1433"

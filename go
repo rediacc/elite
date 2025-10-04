@@ -4,12 +4,21 @@
 # Helper function to run docker compose with appropriate files
 _docker_compose() {
     local cmd="docker compose"
-    
-    # Add project name if instance name is set
+
+    # Base compose file
+    cmd="$cmd -f docker-compose.yml"
+
+    # Auto-detect standalone mode (no INSTANCE_NAME = standalone)
+    if [ -z "$INSTANCE_NAME" ]; then
+        # Standalone mode: add override file with port exposure
+        cmd="$cmd -f docker-compose.standalone.yml"
+    fi
+
+    # Add project name if instance name is set (cloud mode)
     if [ -n "$INSTANCE_NAME" ]; then
         cmd="$cmd --project-name $INSTANCE_NAME"
     fi
-    
+
     # Execute with all passed arguments
     $cmd "$@"
 }
@@ -100,15 +109,110 @@ fi
 
 set +a  # stop auto-exporting
 
+# Function to check and login to Docker registry if needed
+_ensure_registry_login() {
+    # Skip if DOCKER_REGISTRY is not set
+    if [ -z "$DOCKER_REGISTRY" ]; then
+        return 0
+    fi
+
+    # Skip for local registries (localhost, 127.x.x.x, 192.168.x.x, 10.x.x.x, 172.16-31.x.x)
+    if [[ "$DOCKER_REGISTRY" =~ ^(localhost|127\.|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.) ]]; then
+        return 0
+    fi
+
+    # Extract registry host (remove port if present)
+    local registry_host="${DOCKER_REGISTRY%%/*}"
+    registry_host="${registry_host%%:*}"
+
+    # Check if already logged in by attempting to access the registry
+    if docker login "$registry_host" --username "$DOCKER_REGISTRY_USERNAME" --password-stdin <<<'' >/dev/null 2>&1; then
+        return 0
+    fi
+
+    # Attempt login with credentials from environment
+    echo "Authenticating with Docker registry: $registry_host..."
+
+    # Use credentials from environment
+    local username="${DOCKER_REGISTRY_USERNAME}"
+    local password="${DOCKER_REGISTRY_PASSWORD}"
+
+    if [ -z "$username" ] || [ -z "$password" ]; then
+        echo "Warning: DOCKER_REGISTRY_USERNAME or DOCKER_REGISTRY_PASSWORD is not set"
+        echo "Attempting to pull images without authentication..."
+        return 0
+    fi
+
+    # Attempt login (suppress all output to avoid credential leaks in CI)
+    if echo "$password" | docker login "$registry_host" --username "$username" --password-stdin 2>&1 | grep -q "Login Succeeded"; then
+        echo "Successfully authenticated with $registry_host"
+        return 0
+    else
+        echo "Warning: Failed to authenticate with $registry_host"
+        echo "Images may fail to pull if authentication is required"
+        return 1
+    fi
+}
+
+# Function to check if required images exist locally
+_check_and_pull_images() {
+    local images=(
+        "${DOCKER_REGISTRY}/rediacc/nginx:${TAG}"
+        "${DOCKER_REGISTRY}/rediacc/api:${TAG}"
+        "${DOCKER_REGISTRY}/rediacc/sql-server:${TAG}"
+    )
+
+    local missing_images=()
+
+    # Check which images are missing
+    for image in "${images[@]}"; do
+        if ! docker image inspect "$image" >/dev/null 2>&1; then
+            missing_images+=("$image")
+        fi
+    done
+
+    # If images are missing, attempt to pull them
+    if [ ${#missing_images[@]} -gt 0 ]; then
+        echo "Missing images detected. Attempting to pull..."
+
+        # Pull base SQL Server image first from Microsoft servers to utilize their bandwidth
+        # This is the largest layer and benefits from Microsoft's CDN
+        if printf '%s\n' "${missing_images[@]}" | grep -q "sql-server"; then
+            if ! docker image inspect mcr.microsoft.com/mssql/server:2022-CU18-ubuntu-20.04 >/dev/null 2>&1; then
+                echo "Pulling base SQL Server image from Microsoft servers..."
+                docker pull mcr.microsoft.com/mssql/server:2022-CU18-ubuntu-20.04 || true
+            fi
+        fi
+
+        # Ensure we're logged in to the registry
+        _ensure_registry_login
+
+        # Pull each missing image
+        for image in "${missing_images[@]}"; do
+            echo "Pulling $image..."
+            if ! docker pull "$image"; then
+                echo "Error: Failed to pull $image"
+                echo "Please ensure the image exists in the registry or build it locally"
+                return 1
+            fi
+        done
+    fi
+
+    return 0
+}
+
 # Function to start services
 up() {
     echo "Starting elite core services..."
-    
+
+    # Check if images exist, pull if missing
+    _check_and_pull_images || return 1
+
     # Create networks if they don't exist
     local network_prefix="${INSTANCE_NAME:-rediacc}"
     docker network create ${network_prefix}_rediacc_internet 2>/dev/null || true
     docker network create --internal ${network_prefix}_rediacc_intranet 2>/dev/null || true
-    
+
     # Start services using the helper function
     _docker_compose up -d "$@"
 }
