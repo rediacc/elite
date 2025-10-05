@@ -256,6 +256,19 @@ restart() {
     _docker_compose restart "$@"
 }
 
+# Function to check health
+health() {
+    # Run the healthcheck script (check action folder first, then .github for backward compatibility)
+    if [ -f "action/healthcheck.sh" ]; then
+        ./action/healthcheck.sh
+    elif [ -f ".github/healthcheck.sh" ]; then
+        ./.github/healthcheck.sh
+    else
+        echo "Error: healthcheck.sh not found"
+        exit 1
+    fi
+}
+
 # Function to show help
 help() {
     echo "Elite Core Docker Management Script"
@@ -267,6 +280,7 @@ help() {
     echo "  down       - Stop all services"
     echo "  logs       - Show service logs"
     echo "  status     - Show service status"
+    echo "  health     - Check service health"
     echo "  build      - Build/rebuild services"
     echo "  exec       - Execute command in a container"
     echo "  restart    - Restart services"
@@ -276,6 +290,7 @@ help() {
     echo "  ./go up                  # Start all services"
     echo "  ./go down                # Stop all services"
     echo "  ./go logs nginx          # Show nginx logs"
+    echo "  ./go health              # Check if services are healthy"
     echo "  ./go exec api bash       # Open bash in api container"
     echo "  ./go restart api         # Restart api service"
 }
@@ -297,6 +312,10 @@ case "$1" in
     status)
         shift
         status "$@"
+        ;;
+    health)
+        shift
+        health "$@"
         ;;
     build)
         shift

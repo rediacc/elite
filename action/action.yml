@@ -1,0 +1,66 @@
+name: 'Rediacc Elite Services'
+description: 'Start Rediacc core services (nginx, API, SQL Server) for CI/CD testing'
+author: 'Rediacc'
+
+branding:
+  icon: 'database'
+  color: 'blue'
+
+outputs:
+  api-url:
+    description: 'API endpoint URL'
+    value: ${{ steps.setup.outputs.api-url }}
+  sql-connection:
+    description: 'SQL Server connection string (for testing)'
+    value: ${{ steps.setup.outputs.sql-connection }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Rediacc Elite Services
+      id: setup
+      shell: bash
+      working-directory: ${{ github.action_path }}/..
+      run: |
+        echo "Starting Rediacc Elite services..."
+
+        # Export registry credentials from environment
+        export DOCKER_REGISTRY_USERNAME="${DOCKER_REGISTRY_USERNAME}"
+        export DOCKER_REGISTRY_PASSWORD="${DOCKER_REGISTRY_PASSWORD}"
+
+        # Use GitHub run ID for unique instance naming in CI
+        export INSTANCE_NAME="ci-${GITHUB_RUN_ID}"
+
+        # Start services
+        ./go up
+
+        # Wait for services to be healthy
+        echo "Waiting for services to be ready..."
+        timeout 120 bash -c 'until ./go health; do sleep 2; done' || {
+          echo "Services failed to start within timeout"
+          ./go logs
+          exit 1
+        }
+
+        echo "Services are ready!"
+
+        # Output service URLs for workflow use
+        echo "api-url=http://localhost" >> $GITHUB_OUTPUT
+        echo "sql-connection=Server=localhost,1433;User Id=sa;Password=\${MSSQL_SA_PASSWORD};TrustServerCertificate=True" >> $GITHUB_OUTPUT
+
+    - name: Show Service Status
+      shell: bash
+      working-directory: ${{ github.action_path }}/..
+      run: |
+        echo "Service status:"
+        ./go status
+
+    # Cleanup on workflow completion (success or failure)
+    - name: Cleanup Services
+      if: always()
+      shell: bash
+      working-directory: ${{ github.action_path }}/..
+      run: |
+        echo "Cleaning up Rediacc Elite services..."
+        export INSTANCE_NAME="ci-${GITHUB_RUN_ID}"
+        ./go down
