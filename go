@@ -175,12 +175,26 @@ _check_and_pull_images() {
     if [ ${#missing_images[@]} -gt 0 ]; then
         echo "Missing images detected. Attempting to pull..."
 
-        # Pull base SQL Server image first from Microsoft servers to utilize their bandwidth
-        # This is the largest layer and benefits from Microsoft's CDN
+        # Detect and pull SQL Server base image first for bandwidth optimization
+        # This utilizes Microsoft's CDN for the largest layers
         if printf '%s\n' "${missing_images[@]}" | grep -q "sql-server"; then
-            if ! docker image inspect mcr.microsoft.com/mssql/server:2022-CU18-ubuntu-20.04 >/dev/null 2>&1; then
-                echo "Pulling base SQL Server image from Microsoft servers..."
-                docker pull mcr.microsoft.com/mssql/server:2022-CU18-ubuntu-20.04 || true
+            echo "Detecting SQL Server base image for optimized download..."
+
+            # Use detection script to find the exact base image
+            SQL_BASE_IMAGE=""
+            if [ -f "./scripts/detect-sql-base.sh" ]; then
+                # Try to detect base image (suppresses errors if registry unavailable)
+                SQL_BASE_IMAGE=$(./scripts/detect-sql-base.sh --quiet "${DOCKER_REGISTRY}/rediacc/sql-server:${TAG}" 2>/dev/null || true)
+            fi
+
+            # Pull base image if detected
+            if [ -n "$SQL_BASE_IMAGE" ]; then
+                if ! docker image inspect "$SQL_BASE_IMAGE" >/dev/null 2>&1; then
+                    echo "Pre-pulling base image from Microsoft: $SQL_BASE_IMAGE"
+                    docker pull "$SQL_BASE_IMAGE" || echo "Warning: Failed to pre-pull base image (will continue)"
+                fi
+            else
+                echo "Note: Could not detect SQL base image, pulling directly from registry"
             fi
         fi
 
