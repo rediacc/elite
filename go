@@ -175,34 +175,34 @@ _check_and_pull_images() {
     if [ ${#missing_images[@]} -gt 0 ]; then
         echo "Missing images detected. Attempting to pull..."
 
-        # Detect and pull SQL Server base image first for bandwidth optimization
-        # This utilizes Microsoft's CDN for the largest layers
-        if printf '%s\n' "${missing_images[@]}" | grep -q "sql-server"; then
-            echo "Detecting SQL Server base image for optimized download..."
+        # Detect and pull base images for bandwidth optimization
+        # This utilizes public CDNs (Docker Hub, Microsoft) for base layers
+        echo "Detecting base images for optimized download..."
 
-            # Use detection script to find the exact base image
-            SQL_BASE_IMAGE=""
-            if [ -f "./scripts/detect-base-image.sh" ]; then
+        if [ -f "./scripts/detect-base-image.sh" ]; then
+            # Process each missing image to detect and prefetch its base image
+            for image in "${missing_images[@]}"; do
+                # Extract image name (nginx, api, sql-server)
+                local image_name=$(echo "$image" | sed 's/.*rediacc\///' | sed 's/:.*//')
+
                 # Build detection command with optional authentication
-                DETECT_CMD="./scripts/detect-base-image.sh --quiet"
+                local DETECT_CMD="./scripts/detect-base-image.sh --quiet"
                 if [ -n "$DOCKER_REGISTRY_USERNAME" ] && [ -n "$DOCKER_REGISTRY_PASSWORD" ]; then
                     DETECT_CMD="$DETECT_CMD --username \"$DOCKER_REGISTRY_USERNAME\" --password \"$DOCKER_REGISTRY_PASSWORD\""
                 fi
-                DETECT_CMD="$DETECT_CMD \"${DOCKER_REGISTRY}/rediacc/sql-server:${TAG}\""
+                DETECT_CMD="$DETECT_CMD \"$image\""
 
                 # Try to detect base image (suppresses errors if registry unavailable)
-                SQL_BASE_IMAGE=$(eval $DETECT_CMD 2>/dev/null || true)
-            fi
+                local BASE_IMAGE=$(eval $DETECT_CMD 2>/dev/null || true)
 
-            # Pull base image if detected
-            if [ -n "$SQL_BASE_IMAGE" ]; then
-                if ! docker image inspect "$SQL_BASE_IMAGE" >/dev/null 2>&1; then
-                    echo "Pre-pulling base image from Microsoft: $SQL_BASE_IMAGE"
-                    docker pull "$SQL_BASE_IMAGE" || echo "Warning: Failed to pre-pull base image (will continue)"
+                # Pull base image if detected and not already present
+                if [ -n "$BASE_IMAGE" ]; then
+                    if ! docker image inspect "$BASE_IMAGE" >/dev/null 2>&1; then
+                        echo "Pre-pulling base image for $image_name: $BASE_IMAGE"
+                        docker pull "$BASE_IMAGE" || echo "Warning: Failed to pre-pull $BASE_IMAGE (will continue)"
+                    fi
                 fi
-            else
-                echo "Note: Could not detect SQL base image, pulling directly from registry"
-            fi
+            done
         fi
 
         # Ensure we're logged in to the registry
