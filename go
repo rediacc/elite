@@ -195,12 +195,12 @@ _check_and_pull_images() {
                 # Try to detect base image (suppresses errors if registry unavailable)
                 local BASE_IMAGE=$(eval $DETECT_CMD 2>/dev/null || true)
 
-                # Pull base image if detected and not already present
+                # Pull base image if detected (always force fresh pull)
                 if [ -n "$BASE_IMAGE" ]; then
-                    if ! docker image inspect "$BASE_IMAGE" >/dev/null 2>&1; then
-                        echo "Pre-pulling base image for $image_name: $BASE_IMAGE"
-                        docker pull "$BASE_IMAGE" || echo "Warning: Failed to pre-pull $BASE_IMAGE (will continue)"
-                    fi
+                    echo "Pre-pulling base image for $image_name: $BASE_IMAGE"
+                    # Remove local image to force fresh pull from upstream
+                    docker rmi "$BASE_IMAGE" >/dev/null 2>&1 || true
+                    docker pull "$BASE_IMAGE" || echo "Warning: Failed to pre-pull $BASE_IMAGE (will continue)"
                 fi
             done
         fi
