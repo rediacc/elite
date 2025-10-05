@@ -39,5 +39,6 @@ export REDIACC_DATABASE_NAME="${REDIACC_DATABASE_NAME:-RediaccMiddleware}"
 # Build connection string (same format as go script)
 export CONNECTION_STRING="Server=sql,1433;Database=${REDIACC_DATABASE_NAME};User Id=rediacc;Password=\"${MSSQL_RA_PASSWORD}\";TrustServerCertificate=True;Application Name=${REDIACC_DATABASE_NAME};Max Pool Size=32;Min Pool Size=2;Connection Lifetime=120;Connection Timeout=15;Command Timeout=30;Pooling=true;MultipleActiveResultSets=false;Packet Size=32768"
 
-# Set instance name for CI (uses GitHub's run ID for uniqueness)
-export INSTANCE_NAME="ci-${GITHUB_RUN_ID}"
+# Don't set INSTANCE_NAME for CI - use standalone mode with auto-created networks
+# Cloud mode (INSTANCE_NAME set) requires pre-existing external networks which CI doesn't have
+# export INSTANCE_NAME="ci-${GITHUB_RUN_ID}"
