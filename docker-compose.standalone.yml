@@ -10,3 +10,11 @@ services:
   sql:
     ports:
       - "${SQL_PORT:-1433}:1433"
+
+# Override network configuration for standalone mode
+# Networks are managed by docker-compose (not external dependencies)
+networks:
+  internet:
+    external: false
+  intranet:
+    external: false

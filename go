@@ -208,10 +208,9 @@ up() {
     # Check if images exist, pull if missing
     _check_and_pull_images || return 1
 
-    # Create networks if they don't exist
-    local network_prefix="${INSTANCE_NAME:-rediacc}"
-    docker network create ${network_prefix}_rediacc_internet 2>/dev/null || true
-    docker network create --internal ${network_prefix}_rediacc_intranet 2>/dev/null || true
+    # Networks are managed differently based on mode:
+    # - Standalone mode (no INSTANCE_NAME): docker-compose creates networks (external: false)
+    # - Cloud mode (with INSTANCE_NAME): networks pre-created by cloud/go (external: true)
 
     # Start services using the helper function
     _docker_compose up -d "$@"
