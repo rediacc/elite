@@ -44,7 +44,7 @@ jobs:
           echo "🚀 Rediacc Elite Services are now running!"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo ""
-          echo "📍 Service URLs:"
+          echo "📍 Local Service URLs:"
           echo "   • API URL: ${{ steps.services.outputs.api-url }}"
           echo "   • Web UI: http://localhost"
           echo ""
@@ -52,7 +52,56 @@ jobs:
           echo "   • SQL Server: ${{ steps.services.outputs.sql-connection }}"
           echo ""
           echo "⏱️  Services will run for: ${{ github.event.inputs.duration }} minutes"
+          echo ""
+          echo "⏳ Setting up public access via Cloudflare Tunnel..."
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - name: Install Cloudflared
+        run: |
+          echo "📦 Installing Cloudflared..."
+          curl -L --output cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+          sudo dpkg -i cloudflared.deb
+          cloudflared --version
+
+      - name: Start Cloudflare Tunnel
+        run: |
+          echo "🌐 Starting Cloudflare Tunnel..."
+
+          # Start cloudflared in background and capture output
+          cloudflared tunnel --url http://localhost 2>&1 | tee /tmp/cloudflared.log &
+          CLOUDFLARED_PID=$!
+          echo $CLOUDFLARED_PID > /tmp/cloudflared.pid
+
+          # Wait for tunnel URL to appear (max 30 seconds)
+          echo "⏳ Waiting for tunnel URL..."
+          for i in {1..30}; do
+            if grep -q "https://.*\.trycloudflare.com" /tmp/cloudflared.log; then
+              break
+            fi
+            sleep 1
+          done
+
+          # Extract and display the public URL
+          TUNNEL_URL=$(grep -oP "https://.*?\.trycloudflare\.com" /tmp/cloudflared.log | head -1)
+
+          if [ -n "$TUNNEL_URL" ]; then
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "🌍 PUBLIC ACCESS URL"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo ""
+            echo "   🔗 $TUNNEL_URL"
+            echo ""
+            echo "   Access Rediacc services from anywhere using this URL!"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo ""
+
+            # Save URL for later steps
+            echo "$TUNNEL_URL" > /tmp/tunnel_url.txt
+          else
+            echo "⚠️  Warning: Could not extract tunnel URL"
+            cat /tmp/cloudflared.log
+          fi
 
       - name: Initial Service Status
         run: |
@@ -70,6 +119,12 @@ jobs:
           END_TIME=$(($(date +%s) + DURATION_SEC))
           CHECK_INTERVAL=300  # Check every 5 minutes
 
+          # Get tunnel URL if available
+          TUNNEL_URL=""
+          if [ -f /tmp/tunnel_url.txt ]; then
+            TUNNEL_URL=$(cat /tmp/tunnel_url.txt)
+          fi
+
           echo ""
           echo "⏳ Keeping services alive for ${DURATION_MIN} minutes..."
           echo "   Start time: $(date '+%Y-%m-%d %H:%M:%S')"
@@ -81,6 +136,9 @@ jobs:
 
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             echo "⏱️  Time remaining: ${REMAINING} minutes ($(date '+%H:%M:%S'))"
+            if [ -n "$TUNNEL_URL" ]; then
+              echo "🌍 Public URL: $TUNNEL_URL"
+            fi
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
             # Run health check
@@ -128,6 +186,17 @@ jobs:
         run: |
           echo ""
           echo "🧹 Cleaning up services..."
+
+          # Stop cloudflared tunnel
+          if [ -f /tmp/cloudflared.pid ]; then
+            CLOUDFLARED_PID=$(cat /tmp/cloudflared.pid)
+            if ps -p $CLOUDFLARED_PID > /dev/null 2>&1; then
+              echo "🌐 Stopping Cloudflare Tunnel (PID: $CLOUDFLARED_PID)..."
+              kill $CLOUDFLARED_PID || true
+            fi
+          fi
+
+          # Cleanup elite services
           ./action/ci-cleanup.sh
           echo "✅ Cleanup completed"
 
