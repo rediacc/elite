@@ -1,6 +1,8 @@
 name: Manual Service Run
 
-# Manual trigger only - run services for a specified duration
+# Run services for a specified duration
+# - Manual: workflow_dispatch with custom duration
+# - Automatic: on push and daily schedule (5 minutes)
 on:
   workflow_dispatch:
     inputs:
@@ -18,6 +20,14 @@ on:
           - '60'
           - '90'
           - '120'
+
+  push:
+    branches:
+      - main
+
+  schedule:
+    # Run once daily at 00:00 UTC
+    - cron: '0 0 * * *'
 
 jobs:
   run-services:
@@ -40,11 +50,20 @@ jobs:
 
       - name: Display Service Information
         run: |
+          # Set duration: use input if available (manual run), otherwise 5 minutes (auto run)
+          DURATION="${{ github.event.inputs.duration }}"
+          if [ -z "$DURATION" ]; then
+            DURATION="5"
+            TRIGGER_TYPE="Automatic (Push/Schedule)"
+          else
+            TRIGGER_TYPE="Manual"
+          fi
+
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "🚀 Rediacc Elite Services are now running!"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo ""
-          echo "⏱️  SELECTED DURATION: ${{ github.event.inputs.duration }} minutes"
+          echo "⏱️  SELECTED DURATION: ${DURATION} minutes ($TRIGGER_TYPE)"
           echo ""
           echo "📍 Local Service URLs:"
           echo "   • API URL: ${{ steps.services.outputs.api-url }}"
@@ -55,6 +74,9 @@ jobs:
           echo ""
           echo "⏳ Setting up public access via Cloudflare Tunnel..."
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+          # Save duration for later steps
+          echo "$DURATION" > /tmp/duration.txt
 
       - name: Install Cloudflared
         run: |
@@ -114,7 +136,8 @@ jobs:
 
       - name: Keep Services Alive
         run: |
-          DURATION_MIN=${{ github.event.inputs.duration }}
+          # Read duration from saved file
+          DURATION_MIN=$(cat /tmp/duration.txt)
           DURATION_SEC=$((DURATION_MIN * 60))
           END_TIME=$(($(date +%s) + DURATION_SEC))
           CHECK_INTERVAL=300  # Check every 5 minutes
@@ -206,11 +229,17 @@ jobs:
       - name: Summary
         if: always()
         run: |
+          # Read duration from saved file (fallback to "N/A" if not available)
+          DURATION_MIN="N/A"
+          if [ -f /tmp/duration.txt ]; then
+            DURATION_MIN=$(cat /tmp/duration.txt)
+          fi
+
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "📝 Run Summary"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "   • Requested duration: ${{ github.event.inputs.duration }} minutes"
+          echo "   • Requested duration: ${DURATION_MIN} minutes"
           echo "   • Workflow status: ${{ job.status }}"
           echo "   • Completion time: $(date '+%Y-%m-%d %H:%M:%S')"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
