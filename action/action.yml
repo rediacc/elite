@@ -24,23 +24,8 @@ runs:
       run: |
         echo "Starting Rediacc Elite services..."
 
-        # Export registry credentials from environment
-        export DOCKER_REGISTRY_USERNAME="${DOCKER_REGISTRY_USERNAME}"
-        export DOCKER_REGISTRY_PASSWORD="${DOCKER_REGISTRY_PASSWORD}"
-
-        # Export required variables from .env that won't be sourced in instance mode
-        export SYSTEM_DOMAIN="rediacc.com"
-        export DOCKER_REGISTRY="registry.rediacc.com"
-        export TAG="latest"
-
-        # Generate random passwords for SQL Server (required for .env.secret variables)
-        export MSSQL_SA_PASSWORD="$(openssl rand -base64 32 | tr -d '/+=' | cut -c1-20)Aa1!"
-        export MSSQL_RA_PASSWORD="$(openssl rand -base64 32 | tr -d '/+=' | cut -c1-20)Aa1!"
-        export REDIACC_DATABASE_NAME="RediaccMiddleware"
-        export CONNECTION_STRING="Server=sql,1433;Database=${REDIACC_DATABASE_NAME};User Id=rediacc;Password=\"${MSSQL_RA_PASSWORD}\";TrustServerCertificate=True;Application Name=${REDIACC_DATABASE_NAME};Max Pool Size=32;Min Pool Size=2;Connection Lifetime=120;Connection Timeout=15;Command Timeout=30;Pooling=true;MultipleActiveResultSets=false;Packet Size=32768"
-
-        # Use GitHub run ID for unique instance naming in CI
-        export INSTANCE_NAME="ci-${GITHUB_RUN_ID}"
+        # Source CI environment configuration
+        source action/ci-env.sh
 
         # Start services
         ./go up
@@ -73,8 +58,8 @@ runs:
       working-directory: ${{ github.action_path }}/..
       run: |
         echo "Cleaning up Rediacc Elite services..."
-        export SYSTEM_DOMAIN="rediacc.com"
-        export DOCKER_REGISTRY="registry.rediacc.com"
-        export TAG="latest"
-        export INSTANCE_NAME="ci-${GITHUB_RUN_ID}"
+
+        # Source CI environment configuration
+        source action/ci-env.sh
+
         ./go down
