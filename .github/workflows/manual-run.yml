@@ -1,0 +1,144 @@
+name: Manual Service Run
+
+# Manual trigger only - run services for a specified duration
+on:
+  workflow_dispatch:
+    inputs:
+      duration:
+        description: 'Duration to keep services running (minutes)'
+        required: true
+        default: '30'
+        type: choice
+        options:
+          - '5'
+          - '10'
+          - '15'
+          - '30'
+          - '45'
+          - '60'
+          - '90'
+          - '120'
+
+jobs:
+  run-services:
+    name: Run Rediacc Elite Services
+    runs-on: ubuntu-latest
+    timeout-minutes: 180  # 3 hours max
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Start Rediacc Elite Services
+        id: services
+        uses: ./action
+        env:
+          DOCKER_REGISTRY_USERNAME: ${{ secrets.DOCKER_REGISTRY_USERNAME }}
+          DOCKER_REGISTRY_PASSWORD: ${{ secrets.DOCKER_REGISTRY_PASSWORD }}
+        with:
+          keep-alive: true  # Don't auto-cleanup, we'll handle it manually
+
+      - name: Display Service Information
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🚀 Rediacc Elite Services are now running!"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "📍 Service URLs:"
+          echo "   • API URL: ${{ steps.services.outputs.api-url }}"
+          echo "   • Web UI: http://localhost"
+          echo ""
+          echo "🗄️  Database Connection:"
+          echo "   • SQL Server: ${{ steps.services.outputs.sql-connection }}"
+          echo ""
+          echo "⏱️  Services will run for: ${{ github.event.inputs.duration }} minutes"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - name: Initial Service Status
+        run: |
+          echo ""
+          echo "📊 Initial Service Status:"
+          ./go status
+          echo ""
+          echo "✅ Health Check:"
+          ./go health
+
+      - name: Keep Services Alive
+        run: |
+          DURATION_MIN=${{ github.event.inputs.duration }}
+          DURATION_SEC=$((DURATION_MIN * 60))
+          END_TIME=$(($(date +%s) + DURATION_SEC))
+          CHECK_INTERVAL=300  # Check every 5 minutes
+
+          echo ""
+          echo "⏳ Keeping services alive for ${DURATION_MIN} minutes..."
+          echo "   Start time: $(date '+%Y-%m-%d %H:%M:%S')"
+          echo "   End time:   $(date -d @${END_TIME} '+%Y-%m-%d %H:%M:%S')"
+          echo ""
+
+          while [ $(date +%s) -lt ${END_TIME} ]; do
+            REMAINING=$(( (END_TIME - $(date +%s)) / 60 ))
+
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "⏱️  Time remaining: ${REMAINING} minutes ($(date '+%H:%M:%S'))"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+            # Run health check
+            if ./go health; then
+              echo "✅ All services healthy"
+            else
+              echo "⚠️  Some services may be unhealthy"
+              echo ""
+              echo "📋 Container Status:"
+              ./go status
+            fi
+
+            # Calculate next check or remaining time
+            TIME_LEFT=$((END_TIME - $(date +%s)))
+            if [ ${TIME_LEFT} -lt ${CHECK_INTERVAL} ]; then
+              SLEEP_TIME=${TIME_LEFT}
+            else
+              SLEEP_TIME=${CHECK_INTERVAL}
+            fi
+
+            if [ ${SLEEP_TIME} -gt 0 ]; then
+              echo ""
+              echo "💤 Sleeping for $((SLEEP_TIME / 60)) minutes..."
+              sleep ${SLEEP_TIME}
+            fi
+          done
+
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "⏰ Duration completed at $(date '+%Y-%m-%d %H:%M:%S')"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - name: Final Service Status
+        if: always()
+        run: |
+          echo ""
+          echo "📊 Final Service Status:"
+          ./go status || true
+          echo ""
+          echo "📋 Recent Logs (last 50 lines):"
+          ./go logs --tail=50 || true
+
+      - name: Cleanup Services
+        if: always()
+        run: |
+          echo ""
+          echo "🧹 Cleaning up services..."
+          ./action/ci-cleanup.sh
+          echo "✅ Cleanup completed"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📝 Run Summary"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "   • Requested duration: ${{ github.event.inputs.duration }} minutes"
+          echo "   • Workflow status: ${{ job.status }}"
+          echo "   • Completion time: $(date '+%Y-%m-%d %H:%M:%S')"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
