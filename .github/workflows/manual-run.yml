@@ -136,9 +136,6 @@ jobs:
 
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             echo "⏱️  Time remaining: ${REMAINING} minutes ($(date '+%H:%M:%S'))"
-            if [ -n "$TUNNEL_URL" ]; then
-              echo "🌍 Public URL: $TUNNEL_URL"
-            fi
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
             # Run health check
@@ -149,6 +146,12 @@ jobs:
               echo ""
               echo "📋 Container Status:"
               ./go status
+            fi
+
+            # Display public URL between health status and sleep message
+            if [ -n "$TUNNEL_URL" ]; then
+              echo ""
+              echo "🌍 Public URL: $TUNNEL_URL"
             fi
 
             # Calculate next check or remaining time
