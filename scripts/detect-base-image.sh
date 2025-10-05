@@ -7,12 +7,22 @@ set -e
 # Parse arguments
 QUIET=false
 CUSTOM_IMAGE=""
+REGISTRY_USERNAME=""
+REGISTRY_PASSWORD=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         --quiet|-q)
             QUIET=true
             shift
+            ;;
+        --username)
+            REGISTRY_USERNAME="$2"
+            shift 2
+            ;;
+        --password)
+            REGISTRY_PASSWORD="$2"
+            shift 2
             ;;
         *)
             CUSTOM_IMAGE="$1"
@@ -53,8 +63,14 @@ get_manifest() {
 
     local url="https://${registry}/v2/${repo}/manifests/${tag}"
 
+    # Build curl command with optional authentication
+    local curl_cmd="curl -sL"
+    if [ -n "$REGISTRY_USERNAME" ] && [ -n "$REGISTRY_PASSWORD" ]; then
+        curl_cmd="$curl_cmd -u ${REGISTRY_USERNAME}:${REGISTRY_PASSWORD}"
+    fi
+
     # Try to get manifest with standard headers
-    curl -sL \
+    $curl_cmd \
         -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
         -H "Accept: application/vnd.docker.distribution.manifest.list.v2+json" \
         -H "Accept: application/vnd.oci.image.manifest.v1+json" \
@@ -131,7 +147,14 @@ fi
 
 # Fetch config blob
 [ "$QUIET" = false ] && echo -e "${YELLOW}Fetching image config...${NC}"
-CONFIG_BLOB=$(curl -sL "https://${REGISTRY}/v2/${REPO}/blobs/${CONFIG_DIGEST}" 2>/dev/null)
+
+# Build curl command with optional authentication
+BLOB_CURL_CMD="curl -sL"
+if [ -n "$REGISTRY_USERNAME" ] && [ -n "$REGISTRY_PASSWORD" ]; then
+    BLOB_CURL_CMD="$BLOB_CURL_CMD -u ${REGISTRY_USERNAME}:${REGISTRY_PASSWORD}"
+fi
+
+CONFIG_BLOB=$($BLOB_CURL_CMD "https://${REGISTRY}/v2/${REPO}/blobs/${CONFIG_DIGEST}" 2>/dev/null)
 
 # Extract base image label
 BASE_IMAGE_LABEL=$(echo "$CONFIG_BLOB" | jq -r '.config.Labels."com.rediacc.base-image" // empty' 2>/dev/null)

@@ -183,8 +183,15 @@ _check_and_pull_images() {
             # Use detection script to find the exact base image
             SQL_BASE_IMAGE=""
             if [ -f "./scripts/detect-base-image.sh" ]; then
+                # Build detection command with optional authentication
+                DETECT_CMD="./scripts/detect-base-image.sh --quiet"
+                if [ -n "$DOCKER_REGISTRY_USERNAME" ] && [ -n "$DOCKER_REGISTRY_PASSWORD" ]; then
+                    DETECT_CMD="$DETECT_CMD --username \"$DOCKER_REGISTRY_USERNAME\" --password \"$DOCKER_REGISTRY_PASSWORD\""
+                fi
+                DETECT_CMD="$DETECT_CMD \"${DOCKER_REGISTRY}/rediacc/sql-server:${TAG}\""
+
                 # Try to detect base image (suppresses errors if registry unavailable)
-                SQL_BASE_IMAGE=$(./scripts/detect-base-image.sh --quiet "${DOCKER_REGISTRY}/rediacc/sql-server:${TAG}" 2>/dev/null || true)
+                SQL_BASE_IMAGE=$(eval $DETECT_CMD 2>/dev/null || true)
             fi
 
             # Pull base image if detected
