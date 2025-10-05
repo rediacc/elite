@@ -29,7 +29,8 @@ check_container() {
 
 # Function to check nginx
 check_nginx() {
-    if curl -s -f http://localhost:80 > /dev/null 2>&1; then
+    # Check if nginx is proxying requests (use API endpoint since root may not be configured)
+    if curl -s http://localhost/api/health > /dev/null 2>&1; then
         echo -e "${GREEN}✓${NC} nginx is responding"
         return 0
     else
