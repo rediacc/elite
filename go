@@ -182,9 +182,9 @@ _check_and_pull_images() {
 
             # Use detection script to find the exact base image
             SQL_BASE_IMAGE=""
-            if [ -f "./scripts/detect-sql-base.sh" ]; then
+            if [ -f "./scripts/detect-base-image.sh" ]; then
                 # Try to detect base image (suppresses errors if registry unavailable)
-                SQL_BASE_IMAGE=$(./scripts/detect-sql-base.sh --quiet "${DOCKER_REGISTRY}/rediacc/sql-server:${TAG}" 2>/dev/null || true)
+                SQL_BASE_IMAGE=$(./scripts/detect-base-image.sh --quiet "${DOCKER_REGISTRY}/rediacc/sql-server:${TAG}" 2>/dev/null || true)
             fi
 
             # Pull base image if detected
