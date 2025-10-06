@@ -160,6 +160,7 @@ _check_and_pull_images() {
         "${DOCKER_REGISTRY}/rediacc/nginx:${TAG}"
         "${DOCKER_REGISTRY}/rediacc/api:${TAG}"
         "${DOCKER_REGISTRY}/rediacc/sql-server:${TAG}"
+        "${DOCKER_BRIDGE_IMAGE}:${TAG}"
     )
 
     local missing_images=()
