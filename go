@@ -194,7 +194,7 @@ _check_and_pull_images() {
         if [ -f "./scripts/detect-base-image.sh" ]; then
             # Process each missing image to detect and prefetch its base image
             for image in "${missing_images[@]}"; do
-                # Extract image name (nginx, api, sql-server)
+                # Extract image name (nginx, api, sql-server, bridge)
                 local image_name=$(echo "$image" | sed 's/.*\///' | sed 's/:.*//')
 
                 # Build detection command with optional authentication
