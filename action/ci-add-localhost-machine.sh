@@ -142,7 +142,7 @@ fi
 echo "✓ Extracted host key: ${HOST_KEY:0:50}..."
 
 echo ""
-echo "Step 4: Registering machine with middleware"
+echo "Step 5: Registering machine with middleware"
 echo "--------------------------------------------"
 
 # Set API URL for CLI (HTTP_PORT is set by ci-env.sh from .env)
@@ -172,6 +172,30 @@ echo "✓ Logged in successfully"
 
 # Wait a moment for token to be saved
 sleep 0.5
+
+echo ""
+echo "Step 4: Updating team vault with SSH private key"
+echo "-------------------------------------------------"
+
+# Read the SSH private key
+SSH_PRIVATE_KEY=$(cat "$SSH_KEY_FILE")
+
+# Get current team vault and update it with the SSH private key
+echo "Fetching current team vault..."
+CURRENT_TEAM_VAULT=$(_run_cli_command inspect team "${SYSTEM_DEFAULT_TEAM_NAME}" --output json | jq -r '.teamVault')
+
+# Update team vault with new SSH private key
+UPDATED_TEAM_VAULT=$(echo "$CURRENT_TEAM_VAULT" | jq --arg key "$SSH_PRIVATE_KEY" '.SSH_PRIVATE_KEY = $key')
+
+# Update the team with the new vault
+echo "Updating team vault with runner's SSH key..."
+if _run_cli_command UpdateTeam \
+    --teamName "${SYSTEM_DEFAULT_TEAM_NAME}" \
+    --teamVault "$UPDATED_TEAM_VAULT"; then
+    echo "✓ Team vault updated with SSH private key"
+else
+    echo "Warning: Could not update team vault. Bridge may not be able to connect."
+fi
 
 # Create machine vault JSON
 MACHINE_VAULT_JSON=$(jq -n \
