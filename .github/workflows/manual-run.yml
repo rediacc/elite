@@ -97,6 +97,7 @@ jobs:
         with:
           timeout: 60
           limit-access-to-actor: true
+          authorized-keys-repo: 'rediacc/authorized-keys'
 
       - name: Display Access Information
         run: |
