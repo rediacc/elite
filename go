@@ -91,6 +91,11 @@ EOF
     echo -e "\e[31mIMPORTANT: Keep .env.secret secure and never commit it to git!\e[0m"
 fi
 
+# Preserve Docker registry credentials from CI environment before sourcing .env
+# (ci-env.sh sets these from GITHUB_TOKEN in GitHub Actions)
+CI_REGISTRY_USERNAME="${DOCKER_REGISTRY_USERNAME}"
+CI_REGISTRY_PASSWORD="${DOCKER_REGISTRY_PASSWORD}"
+
 # Source environment files and export for docker compose
 set -a  # automatically export all variables
 
@@ -109,11 +114,10 @@ fi
 
 set +a  # stop auto-exporting
 
-# Preserve Docker registry credentials from CI environment if already set
-# (ci-env.sh sets these from GITHUB_TOKEN in GitHub Actions)
-if [ -z "$DOCKER_REGISTRY_USERNAME" ] && [ -n "$GITHUB_TOKEN" ]; then
-    export DOCKER_REGISTRY_USERNAME="${GITHUB_ACTOR:-github-actions}"
-    export DOCKER_REGISTRY_PASSWORD="${GITHUB_TOKEN}"
+# Restore CI credentials if they were set (don't let .env override them)
+if [ -n "$CI_REGISTRY_USERNAME" ]; then
+    export DOCKER_REGISTRY_USERNAME="$CI_REGISTRY_USERNAME"
+    export DOCKER_REGISTRY_PASSWORD="$CI_REGISTRY_PASSWORD"
 fi
 
 # Function to check and login to Docker registry if needed
