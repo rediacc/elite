@@ -188,7 +188,11 @@ jobs:
 
             if [ ${SLEEP_TIME} -gt 0 ]; then
               echo ""
-              echo "💤 Sleeping for $((SLEEP_TIME / 60)) minutes..."
+              if [ ${SLEEP_TIME} -eq ${CHECK_INTERVAL} ]; then
+                echo "💤 Next health check in $((SLEEP_TIME / 60)) minutes..."
+              else
+                echo "💤 Final wait: $((SLEEP_TIME / 60)) minute(s) until end of session..."
+              fi
               sleep ${SLEEP_TIME}
             fi
           done
