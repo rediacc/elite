@@ -25,10 +25,6 @@ on:
         required: false
         default: false
         type: boolean
-      authorized-keys-repo:
-        description: 'Private repo with authorized SSH keys (format: owner/repo)'
-        required: false
-        type: string
 
   push:
     branches:
@@ -100,8 +96,6 @@ jobs:
         uses: rediacc/action-tmate@v1
         with:
           timeout: 60
-          limit-access-to-actor: true
-          authorized-keys-repo: ${{ github.event.inputs.authorized-keys-repo || 'rediacc/authorized-keys' }}
 
       - name: Display Access Information
         run: |
@@ -119,15 +113,11 @@ jobs:
             echo "🔧 DEBUG ACCESS (Interactive Terminal)"
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             echo ""
-            echo "   🔐 Access restricted to @${{ github.actor }}'s SSH keys"
-            echo ""
             echo "   SSH Terminal:  ${{ steps.tmate.outputs.ssh-connection }}"
             echo "   Web Terminal:  ${{ steps.tmate.outputs.web-url }}"
             echo ""
             echo "   Read-Only SSH: ${{ steps.tmate.outputs.ssh-ro-connection }}"
             echo "   Read-Only Web: ${{ steps.tmate.outputs.web-ro-url }}"
-            echo ""
-            echo "💡 TIP: Only your GitHub SSH keys can connect"
             echo ""
           fi
 
