@@ -254,6 +254,44 @@ else
     echo "Note: Machine may already exist or there was an error"
 fi
 
+echo ""
+echo "Step 6: Queueing machine setup task"
+echo "------------------------------------"
+
+# Queue a setup task for the localhost machine
+# This will install required tools (btrfs-progs, docker, rclone, etc.)
+echo "Creating setup queue item..."
+SETUP_VAULT=$(jq -n \
+    --arg team "$SYSTEM_DEFAULT_TEAM_NAME" \
+    --arg machine "$MACHINE_NAME" \
+    --arg bridge "${SYSTEM_DEFAULT_BRIDGE_NAME}" \
+    '{
+        function: "setup",
+        teamName: $team,
+        machineName: $machine,
+        bridgeName: $bridge,
+        params: {
+            datastore_size: "95%",
+            source: "apt-repo",
+            rclone_source: "install-script",
+            docker_source: "docker-repo",
+            install_amd_driver: "auto",
+            install_nvidia_driver: "auto"
+        }
+    }')
+
+if _run_cli_command CreateQueueItem \
+    --teamName "$SYSTEM_DEFAULT_TEAM_NAME" \
+    --machineName "$MACHINE_NAME" \
+    --bridgeName "${SYSTEM_DEFAULT_BRIDGE_NAME}" \
+    --queueVault "$SETUP_VAULT" \
+    --priority 1 2>&1 | grep -q "Successfully executed"; then
+    echo "✓ Setup task queued successfully"
+    echo "  The bridge will process this task and install required dependencies"
+else
+    echo "Warning: Could not queue setup task. Manual setup may be required."
+fi
+
 # Logout
 _run_cli_command logout || true
 
