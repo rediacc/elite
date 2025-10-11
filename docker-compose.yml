@@ -1,6 +1,6 @@
 services:
   nginx:
-    image: ${DOCKER_REGISTRY}/rediacc/nginx:${TAG}
+    image: ${DOCKER_REGISTRY}/nginx:${TAG}
     pull_policy: never
     container_name: ${INSTANCE_NAME:-rediacc}-nginx
     hostname: ${INSTANCE_NAME:-rediacc}-nginx
@@ -16,7 +16,7 @@ services:
     restart: unless-stopped
 
   api:
-    image: ${DOCKER_REGISTRY}/rediacc/api:${TAG}
+    image: ${DOCKER_REGISTRY}/api:${TAG}
     pull_policy: never
     container_name: ${INSTANCE_NAME:-rediacc}-api
     hostname: ${INSTANCE_NAME:-rediacc}-api
@@ -38,7 +38,7 @@ services:
     restart: unless-stopped
 
   sql:
-    image: ${DOCKER_REGISTRY}/rediacc/sql-server:${TAG}
+    image: ${DOCKER_REGISTRY}/sql-server:${TAG}
     pull_policy: never
     container_name: ${INSTANCE_NAME:-rediacc}-sql
     hostname: ${INSTANCE_NAME:-rediacc}-sql
