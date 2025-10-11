@@ -31,4 +31,5 @@ action/ci-add-localhost-machine.sh || {
 
 # Output service URLs for workflow use
 echo "api-url=http://localhost" >> $GITHUB_OUTPUT
-echo "sql-connection=Server=localhost,1433;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True" >> $GITHUB_OUTPUT
+# Note: SQL connection string with password is available via environment variable MSSQL_SA_PASSWORD
+# but we don't expose it in GITHUB_OUTPUT for security reasons

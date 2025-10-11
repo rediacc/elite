@@ -49,6 +49,12 @@ export MSSQL_SA_PASSWORD="$(generate_password)"
 export MSSQL_RA_PASSWORD="$(generate_password)"
 export REDIACC_DATABASE_NAME="${REDIACC_DATABASE_NAME:-RediaccMiddleware}"
 
+# Mask passwords in GitHub Actions logs
+if [ -n "$GITHUB_ACTIONS" ]; then
+    echo "::add-mask::$MSSQL_SA_PASSWORD"
+    echo "::add-mask::$MSSQL_RA_PASSWORD"
+fi
+
 # Build connection string (same format as go script)
 export CONNECTION_STRING="Server=sql,1433;Database=${REDIACC_DATABASE_NAME};User Id=rediacc;Password=\"${MSSQL_RA_PASSWORD}\";TrustServerCertificate=True;Application Name=${REDIACC_DATABASE_NAME};Max Pool Size=32;Min Pool Size=2;Connection Lifetime=120;Connection Timeout=15;Command Timeout=30;Pooling=true;MultipleActiveResultSets=false;Packet Size=32768"
 
