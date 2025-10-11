@@ -157,9 +157,9 @@ _ensure_registry_login() {
 # Function to check if required images exist locally
 _check_and_pull_images() {
     local images=(
-        "${DOCKER_REGISTRY}/rediacc/nginx:${TAG}"
-        "${DOCKER_REGISTRY}/rediacc/api:${TAG}"
-        "${DOCKER_REGISTRY}/rediacc/sql-server:${TAG}"
+        "${DOCKER_REGISTRY}/nginx:${TAG}"
+        "${DOCKER_REGISTRY}/api:${TAG}"
+        "${DOCKER_REGISTRY}/sql-server:${TAG}"
         "${DOCKER_BRIDGE_IMAGE}:${TAG}"
     )
 
@@ -184,7 +184,7 @@ _check_and_pull_images() {
             # Process each missing image to detect and prefetch its base image
             for image in "${missing_images[@]}"; do
                 # Extract image name (nginx, api, sql-server)
-                local image_name=$(echo "$image" | sed 's/.*rediacc\///' | sed 's/:.*//')
+                local image_name=$(echo "$image" | sed 's/.*\///' | sed 's/:.*//')
 
                 # Build detection command with optional authentication
                 local DETECT_CMD="./scripts/detect-base-image.sh --quiet"
