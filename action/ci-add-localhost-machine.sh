@@ -258,23 +258,6 @@ fi
 _run_cli_command logout || true
 
 echo ""
-echo "Step 6: Running machine setup (creating setup marker)"
-echo "------------------------------------------------------"
-
-# For CI, we just need to create the setup marker file
-# GitHub Actions runners already have necessary tools installed
-echo "Creating setup completion marker..."
-sudo mkdir -p /var/lib/rediacc /var/run/rediacc
-sudo chmod 755 /var/run/rediacc
-echo "$(date '+%Y-%m-%d %H:%M:%S')" | sudo tee /var/lib/rediacc/os_setup_completed > /dev/null
-
-if [ -f /var/lib/rediacc/os_setup_completed ]; then
-    echo "✓ Setup marker created successfully"
-else
-    echo "Warning: Failed to create setup marker. Tasks may fail."
-fi
-
-echo ""
 echo "============================================"
 echo "✓ Localhost machine setup complete"
 echo "============================================"
