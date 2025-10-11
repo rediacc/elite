@@ -100,7 +100,7 @@ if [ -z "$INSTANCE_NAME" ]; then
     if [ -f ".env" ]; then
         source .env
     fi
-    
+
     # Source secret file
     if [ -f ".env.secret" ]; then
         source .env.secret
@@ -108,6 +108,13 @@ if [ -z "$INSTANCE_NAME" ]; then
 fi
 
 set +a  # stop auto-exporting
+
+# Preserve Docker registry credentials from CI environment if already set
+# (ci-env.sh sets these from GITHUB_TOKEN in GitHub Actions)
+if [ -z "$DOCKER_REGISTRY_USERNAME" ] && [ -n "$GITHUB_TOKEN" ]; then
+    export DOCKER_REGISTRY_USERNAME="${GITHUB_ACTOR:-github-actions}"
+    export DOCKER_REGISTRY_PASSWORD="${GITHUB_TOKEN}"
+fi
 
 # Function to check and login to Docker registry if needed
 _ensure_registry_login() {
