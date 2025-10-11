@@ -171,7 +171,7 @@ _check_and_pull_images() {
         "${DOCKER_REGISTRY}/nginx:${TAG}"
         "${DOCKER_REGISTRY}/api:${TAG}"
         "${DOCKER_REGISTRY}/sql-server:${TAG}"
-        "${DOCKER_BRIDGE_IMAGE}:${TAG}"
+        "${DOCKER_BRIDGE_IMAGE}"
     )
 
     local missing_images=()
