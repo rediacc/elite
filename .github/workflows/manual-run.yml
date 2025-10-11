@@ -28,7 +28,6 @@ on:
       authorized-keys-repo:
         description: 'Private repo with authorized SSH keys (format: owner/repo)'
         required: false
-        default: 'rediacc/authorized-keys'
         type: string
 
   push:
