@@ -44,6 +44,11 @@ export DOCKER_BRIDGE_IMAGE="${DOCKER_REGISTRY}/bridge:${TAG}"
 # Set Docker network name for bridge containers (standalone mode uses rediacc_internet)
 export DOCKER_INTERNET_NETWORK="rediacc_internet"
 
+# Set Docker bridge network mode to "host" for CI
+# This allows bridge containers to access the host's localhost (127.0.0.1) for SSH connections
+# In production/cloud mode, this defaults to the internet network for proper isolation
+export DOCKER_BRIDGE_NETWORK_MODE="host"
+
 # Generate database passwords
 export MSSQL_SA_PASSWORD="$(generate_password)"
 export MSSQL_RA_PASSWORD="$(generate_password)"
