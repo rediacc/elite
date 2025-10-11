@@ -191,8 +191,8 @@ fi
 
 # Find the team in the response and extract vault + version
 TEAM_DATA=$(echo "$TEAMS_RESPONSE" | jq -r --arg team "$SYSTEM_DEFAULT_TEAM_NAME" '
-    .resultSets[1].data[] | select(.TeamName == $team) |
-    {vault: .TeamVault, version: .VaultVersion}
+    .data.result[] | select(.teamName == $team) |
+    {vault: .vaultContent, version: .vaultVersion}
 ')
 
 if [ -z "$TEAM_DATA" ] || [ "$TEAM_DATA" = "null" ]; then
@@ -200,21 +200,20 @@ if [ -z "$TEAM_DATA" ] || [ "$TEAM_DATA" = "null" ]; then
     exit 1
 fi
 
-CURRENT_VAULT=$(echo "$TEAM_DATA" | jq -r '.vault')
+CURRENT_VAULT_STR=$(echo "$TEAM_DATA" | jq -r '.vault')
 VAULT_VERSION=$(echo "$TEAM_DATA" | jq -r '.version')
 
 echo "Current vault version: $VAULT_VERSION"
 
-# Update vault with SSH private key
-UPDATED_VAULT=$(echo "$CURRENT_VAULT" | jq --arg key "$SSH_PRIVATE_KEY" '.SSH_PRIVATE_KEY = $key')
+# Parse vault string, update with SSH private key, and convert back to compact JSON
+UPDATED_VAULT_STR=$(echo "$CURRENT_VAULT_STR" | jq --arg key "$SSH_PRIVATE_KEY" '.SSH_PRIVATE_KEY = $key' | jq -c .)
 
 # Call UpdateTeamVault via CLI dynamic endpoint
 echo "Updating team vault with runner's SSH key..."
 if _run_cli_command UpdateTeamVault \
     --teamName "$SYSTEM_DEFAULT_TEAM_NAME" \
-    --teamVault "$UPDATED_VAULT" \
-    --vaultVersion "$VAULT_VERSION" \
-    --output json >/dev/null 2>&1; then
+    --teamVault "$UPDATED_VAULT_STR" \
+    --vaultVersion "$VAULT_VERSION" 2>&1 | grep -q "Successfully executed"; then
     echo "✓ Team vault updated with SSH private key"
 else
     echo "Warning: Could not update team vault. Bridge may not be able to connect."
