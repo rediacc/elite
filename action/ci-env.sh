@@ -38,6 +38,9 @@ export SYSTEM_DOMAIN="${SYSTEM_DOMAIN}"
 export DOCKER_REGISTRY="${DOCKER_REGISTRY}"
 export TAG="${TAG}"
 
+# Ensure DOCKER_BRIDGE_IMAGE includes the tag (required for middleware to create bridge containers)
+export DOCKER_BRIDGE_IMAGE="${DOCKER_REGISTRY}/bridge:${TAG}"
+
 # Generate database passwords
 export MSSQL_SA_PASSWORD="$(generate_password)"
 export MSSQL_RA_PASSWORD="$(generate_password)"
