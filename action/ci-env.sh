@@ -49,6 +49,11 @@ export DOCKER_INTERNET_NETWORK="rediacc_internet"
 # In production/cloud mode, this defaults to the internet network for proper isolation
 export DOCKER_BRIDGE_NETWORK_MODE="host"
 
+# Set Docker bridge API URL for host networking
+# When bridges use host networking, they cannot resolve Docker container names
+# Must use localhost since nginx exposes port 80 on the host
+export DOCKER_BRIDGE_API_URL="http://localhost"
+
 # Generate database passwords
 export MSSQL_SA_PASSWORD="$(generate_password)"
 export MSSQL_RA_PASSWORD="$(generate_password)"
