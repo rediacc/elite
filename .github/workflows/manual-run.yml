@@ -20,6 +20,11 @@ on:
           - '60'
           - '90'
           - '120'
+      enable-debug:
+        description: 'Enable tmate SSH debugging session'
+        required: false
+        default: false
+        type: boolean
 
   push:
     branches:
@@ -85,6 +90,45 @@ jobs:
           url: http://localhost
           timeout: 30
 
+      - name: Create Debug Session
+        if: github.event.inputs.enable-debug == 'true'
+        id: tmate
+        uses: rediacc/action-tmate@v1
+        with:
+          timeout: 60
+
+      - name: Display Access Information
+        run: |
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🌍 PUBLIC ACCESS"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "   Cloudflare Tunnel: ${{ steps.tunnel.outputs.tunnel-url }}"
+          echo ""
+
+          # Display debug access if enabled
+          if [ "${{ github.event.inputs.enable-debug }}" == "true" ]; then
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "🔧 DEBUG ACCESS (Interactive Terminal)"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo ""
+            echo "   SSH Terminal:  ${{ steps.tmate.outputs.ssh-connection }}"
+            echo "   Web Terminal:  ${{ steps.tmate.outputs.web-url }}"
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "👁️  READ-ONLY ACCESS (Safe for Sharing)"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo ""
+            echo "   SSH (Read-Only): ${{ steps.tmate.outputs.ssh-ro-connection }}"
+            echo "   Web (Read-Only): ${{ steps.tmate.outputs.web-ro-url }}"
+            echo ""
+            echo "💡 TIP: Connect via SSH or web browser to debug services interactively"
+            echo ""
+          fi
+
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
       - name: Initial Service Status
         run: |
           echo ""
@@ -128,10 +172,16 @@ jobs:
               ./go status
             fi
 
-            # Display public URL between health status and sleep message
+            # Display access information
             if [ -n "$TUNNEL_URL" ]; then
               echo ""
               echo "🌍 Public URL: $TUNNEL_URL"
+            fi
+
+            # Display debug access if enabled
+            if [ "${{ github.event.inputs.enable-debug }}" == "true" ]; then
+              echo "🔧 Debug SSH: ${{ steps.tmate.outputs.ssh-connection }}"
+              echo "🔧 Debug Web: ${{ steps.tmate.outputs.web-url }}"
             fi
 
             # Calculate next check or remaining time
@@ -169,6 +219,17 @@ jobs:
         run: |
           echo ""
           echo "🧹 Cleaning up services..."
+
+          # Stop tmate session if enabled
+          if [ "${{ github.event.inputs.enable-debug }}" == "true" ]; then
+            TMATE_PID="${{ steps.tmate.outputs.session-pid }}"
+            if [ -n "$TMATE_PID" ]; then
+              if ps -p $TMATE_PID > /dev/null 2>&1; then
+                echo "🖥️  Stopping tmate session (PID: $TMATE_PID)..."
+                kill $TMATE_PID || true
+              fi
+            fi
+          fi
 
           # Stop cloudflared tunnel
           TUNNEL_PID="${{ steps.tunnel.outputs.tunnel-pid }}"
