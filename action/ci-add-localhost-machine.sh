@@ -26,8 +26,19 @@ MACHINE_IP="127.0.0.1"
 MACHINE_USER="${USER:-runner}"
 MACHINE_DATASTORE="/tmp/rediacc-datastore"
 SSH_DIR="$HOME/.ssh"
-SSH_KEY_FILE="$SSH_DIR/id_rsa_rediacc_local"
-SSH_PUB_KEY_FILE="${SSH_KEY_FILE}.pub"
+
+# Find existing SSH key (prefer ed25519, then rsa)
+SSH_KEY_FILE=""
+SSH_PUB_KEY_FILE=""
+if [ -f "$SSH_DIR/id_ed25519" ]; then
+    SSH_KEY_FILE="$SSH_DIR/id_ed25519"
+    SSH_PUB_KEY_FILE="$SSH_DIR/id_ed25519.pub"
+    echo "Using existing ed25519 SSH key"
+elif [ -f "$SSH_DIR/id_rsa" ]; then
+    SSH_KEY_FILE="$SSH_DIR/id_rsa"
+    SSH_PUB_KEY_FILE="$SSH_DIR/id_rsa.pub"
+    echo "Using existing RSA SSH key"
+fi
 
 # Helper function to run CLI command
 _run_cli_command() {
@@ -47,25 +58,27 @@ chmod 755 "$HOME" || {
     echo "Warning: Could not fix home directory permissions"
 }
 
-# Generate SSH key pair for localhost access (if not exists)
-if [ ! -f "$SSH_KEY_FILE" ]; then
-    echo "Generating SSH key pair for localhost..."
-    ssh-keygen -t rsa -b 2048 -f "$SSH_KEY_FILE" -q -N "" -C "rediacc-ci-local"
+# Generate SSH key pair only if no existing keys found
+if [ -z "$SSH_KEY_FILE" ]; then
+    echo "No existing SSH keys found, generating new key pair..."
+    SSH_KEY_FILE="$SSH_DIR/id_rsa"
+    SSH_PUB_KEY_FILE="$SSH_DIR/id_rsa.pub"
+    ssh-keygen -t rsa -b 2048 -f "$SSH_KEY_FILE" -q -N "" -C "github-actions-runner"
     echo "SSH key generated: $SSH_KEY_FILE"
-else
-    echo "SSH key already exists: $SSH_KEY_FILE"
 fi
 
-# Add public key to authorized_keys
+# Add public key to authorized_keys (if not already present)
 echo "Adding public key to authorized_keys..."
 touch "$SSH_DIR/authorized_keys"
 chmod 600 "$SSH_DIR/authorized_keys"
 
-# Remove old entry if exists and add new one
-grep -v "rediacc-ci-local" "$SSH_DIR/authorized_keys" > "$SSH_DIR/authorized_keys.tmp" || true
-cat "$SSH_PUB_KEY_FILE" >> "$SSH_DIR/authorized_keys.tmp"
-mv "$SSH_DIR/authorized_keys.tmp" "$SSH_DIR/authorized_keys"
-chmod 600 "$SSH_DIR/authorized_keys"
+# Check if key is already in authorized_keys
+if ! grep -qF "$(cat "$SSH_PUB_KEY_FILE")" "$SSH_DIR/authorized_keys" 2>/dev/null; then
+    cat "$SSH_PUB_KEY_FILE" >> "$SSH_DIR/authorized_keys"
+    echo "✓ Public key added to authorized_keys"
+else
+    echo "✓ Public key already in authorized_keys"
+fi
 
 # Test SSH connection to localhost
 echo "Testing SSH connection to localhost..."
@@ -120,18 +133,7 @@ fi
 echo "✓ Extracted host key: ${HOST_KEY:0:50}..."
 
 echo ""
-echo "Step 4: Reading SSH keys from team vault"
-echo "-----------------------------------------"
-
-# The SDK SSH keys should already be in the team vault from _post_up.sh
-# We'll use those keys for consistency, but also include the local key we generated
-SSH_PRIVATE_KEY=$(cat "$SSH_KEY_FILE")
-SSH_PUBLIC_KEY=$(cat "$SSH_PUB_KEY_FILE")
-
-echo "✓ Read SSH keys"
-
-echo ""
-echo "Step 5: Registering machine with middleware"
+echo "Step 4: Registering machine with middleware"
 echo "--------------------------------------------"
 
 # Set API URL for CLI
