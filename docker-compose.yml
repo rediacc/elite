@@ -24,6 +24,7 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       - ConnectionString=${CONNECTION_STRING}
       - DOCKER_BRIDGE_IMAGE=${DOCKER_BRIDGE_IMAGE}
+      - DOCKER_INTERNET_NETWORK=${INSTANCE_NAME:-rediacc}_rediacc_internet
       - SYSTEM_COMPANY_VAULT_DEFAULTS=${SYSTEM_COMPANY_VAULT_DEFAULTS}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
