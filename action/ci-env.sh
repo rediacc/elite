@@ -22,9 +22,16 @@ generate_password() {
     echo "${password}Aa1!"
 }
 
-# Export registry credentials (pass-through from environment)
-export DOCKER_REGISTRY_USERNAME="${DOCKER_REGISTRY_USERNAME}"
-export DOCKER_REGISTRY_PASSWORD="${DOCKER_REGISTRY_PASSWORD}"
+# Export registry credentials
+# For GitHub Container Registry, use GITHUB_TOKEN if available (GitHub Actions)
+# Otherwise use provided credentials (local development)
+if [ -n "$GITHUB_TOKEN" ]; then
+    export DOCKER_REGISTRY_USERNAME="${GITHUB_ACTOR:-github-actions}"
+    export DOCKER_REGISTRY_PASSWORD="${GITHUB_TOKEN}"
+else
+    export DOCKER_REGISTRY_USERNAME="${DOCKER_REGISTRY_USERNAME}"
+    export DOCKER_REGISTRY_PASSWORD="${DOCKER_REGISTRY_PASSWORD}"
+fi
 
 # Export configuration from .env (now available after sourcing)
 export SYSTEM_DOMAIN="${SYSTEM_DOMAIN}"

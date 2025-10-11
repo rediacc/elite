@@ -116,14 +116,14 @@ _ensure_registry_login() {
         return 0
     fi
 
-    # Skip for local registries (localhost, 127.x.x.x, 192.168.x.x, 10.x.x.x, 172.16-31.x.x)
-    if [[ "$DOCKER_REGISTRY" =~ ^(localhost|127\.|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.) ]]; then
-        return 0
-    fi
-
-    # Extract registry host (remove port if present)
+    # Extract registry host (remove namespace if present, e.g., ghcr.io/rediacc -> ghcr.io)
     local registry_host="${DOCKER_REGISTRY%%/*}"
     registry_host="${registry_host%%:*}"
+
+    # Skip for local registries (localhost, 127.x.x.x, 192.168.x.x, 10.x.x.x, 172.16-31.x.x)
+    if [[ "$registry_host" =~ ^(localhost|127\.|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.) ]]; then
+        return 0
+    fi
 
     # Check if already logged in by attempting to access the registry
     if docker login "$registry_host" --username "$DOCKER_REGISTRY_USERNAME" --password-stdin <<<'' >/dev/null 2>&1; then
