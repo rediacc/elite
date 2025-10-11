@@ -40,9 +40,18 @@ elif [ -f "$SSH_DIR/id_rsa" ]; then
     echo "Using existing RSA SSH key"
 fi
 
+# Install rediacc CLI from PyPI if not already installed
+if ! command -v rediacc &> /dev/null; then
+    echo "Installing rediacc CLI from PyPI..."
+    pip install --quiet rediacc
+    echo "✓ rediacc CLI installed"
+else
+    echo "✓ rediacc CLI already installed"
+fi
+
 # Helper function to run CLI command
 _run_cli_command() {
-    (cd "$PROJECT_ROOT/cli" && PYTHONPATH="$PROJECT_ROOT/cli/src" python3 -m cli.commands.cli_main "$@")
+    rediacc "$@"
 }
 
 echo ""
@@ -136,8 +145,14 @@ echo ""
 echo "Step 4: Registering machine with middleware"
 echo "--------------------------------------------"
 
-# Set API URL for CLI
-export SYSTEM_API_URL="http://${SYSTEM_DOMAIN:-localhost}:8080/api"
+# Set API URL for CLI (HTTP_PORT is set by ci-env.sh from .env)
+if [ -n "$HTTP_PORT" ] && [ "$HTTP_PORT" != "80" ]; then
+    export SYSTEM_API_URL="http://localhost:${HTTP_PORT}/api"
+else
+    export SYSTEM_API_URL="http://localhost/api"
+fi
+
+echo "Using API URL: $SYSTEM_API_URL"
 
 # Check if required environment variables are set
 if [ -z "$SYSTEM_ADMIN_EMAIL" ] || [ -z "$SYSTEM_ADMIN_PASSWORD" ]; then
