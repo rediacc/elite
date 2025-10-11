@@ -177,8 +177,9 @@ echo ""
 echo "Step 4: Updating team vault with SSH private key"
 echo "-------------------------------------------------"
 
-# Read the SSH private key
-SSH_PRIVATE_KEY=$(cat "$SSH_KEY_FILE")
+# Read and base64-encode the SSH keys (bridge expects base64-encoded keys)
+SSH_PRIVATE_KEY_B64=$(base64 -w 0 "$SSH_KEY_FILE")
+SSH_PUBLIC_KEY_B64=$(base64 -w 0 "$SSH_PUB_KEY_FILE")
 
 # Get current team vault via GetCompanyTeams
 echo "Fetching current team vault..."
@@ -205,8 +206,11 @@ VAULT_VERSION=$(echo "$TEAM_DATA" | jq -r '.version')
 
 echo "Current vault version: $VAULT_VERSION"
 
-# Parse vault string, update with SSH private key, and convert back to compact JSON
-UPDATED_VAULT_STR=$(echo "$CURRENT_VAULT_STR" | jq --arg key "$SSH_PRIVATE_KEY" '.SSH_PRIVATE_KEY = $key' | jq -c .)
+# Parse vault string, update with base64-encoded SSH keys, and convert back to compact JSON
+UPDATED_VAULT_STR=$(echo "$CURRENT_VAULT_STR" | jq \
+    --arg priv_key "$SSH_PRIVATE_KEY_B64" \
+    --arg pub_key "$SSH_PUBLIC_KEY_B64" \
+    '.SSH_PRIVATE_KEY = $priv_key | .SSH_PUBLIC_KEY = $pub_key' | jq -c .)
 
 # Call UpdateTeamVault via CLI dynamic endpoint
 echo "Updating team vault with runner's SSH key..."
