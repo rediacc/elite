@@ -41,8 +41,8 @@ export TAG="${TAG}"
 # Ensure DOCKER_BRIDGE_IMAGE includes the tag (required for middleware to create bridge containers)
 export DOCKER_BRIDGE_IMAGE="${DOCKER_REGISTRY}/bridge:${TAG}"
 
-# Set Docker network name for bridge containers (standalone mode uses rediacc_rediacc_internet)
-export DOCKER_INTERNET_NETWORK="rediacc_rediacc_internet"
+# Set Docker network name for bridge containers (standalone mode uses rediacc_internet)
+export DOCKER_INTERNET_NETWORK="rediacc_internet"
 
 # Generate database passwords
 export MSSQL_SA_PASSWORD="$(generate_password)"
