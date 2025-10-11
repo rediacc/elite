@@ -25,11 +25,6 @@ on:
         required: false
         default: false
         type: boolean
-      debug-password:
-        description: 'Debug session password (must match DEBUG_PASSWORD secret)'
-        required: false
-        default: ''
-        type: string
 
   push:
     branches:
@@ -95,23 +90,12 @@ jobs:
           url: http://localhost
           timeout: 30
 
-      - name: Validate Debug Password
-        if: github.event.inputs.enable-debug == 'true'
-        run: |
-          if [ "${{ github.event.inputs.debug-password }}" != "${{ secrets.DEBUG_PASSWORD }}" ]; then
-            echo "❌ Invalid debug password"
-            echo "Debug session requires correct password from DEBUG_PASSWORD secret"
-            exit 1
-          fi
-          echo "✅ Debug password validated"
-
       - name: Create Debug Session
         if: github.event.inputs.enable-debug == 'true'
         id: tmate
         uses: rediacc/action-tmate@v1
         with:
           timeout: 60
-          silent-mode: true
 
       - name: Display Access Information
         run: |
@@ -129,14 +113,13 @@ jobs:
             echo "🔧 DEBUG ACCESS (Interactive Terminal)"
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             echo ""
-            echo "   🔐 Debug session active (password-protected)"
-            echo "   📋 Connection details available as step outputs"
+            echo "   SSH Terminal:  ${{ steps.tmate.outputs.ssh-connection }}"
+            echo "   Web Terminal:  ${{ steps.tmate.outputs.web-url }}"
             echo ""
-            echo "   To retrieve connection info:"
-            echo "   gh run view ${{ github.run_id }} --json jobs -q '.jobs[] | select(.name==\"Run Rediacc Elite Services\") | .steps[] | select(.name==\"Create Debug Session\") | .conclusion'"
+            echo "   Read-Only SSH: ${{ steps.tmate.outputs.ssh-ro-connection }}"
+            echo "   Read-Only Web: ${{ steps.tmate.outputs.web-ro-url }}"
             echo ""
-            echo "💡 SECURITY: Connection strings not displayed in logs"
-            echo "   Access via GitHub API or check step outputs directly"
+            echo "💡 TIP: Connect via SSH or web browser to debug services interactively"
             echo ""
           fi
 
