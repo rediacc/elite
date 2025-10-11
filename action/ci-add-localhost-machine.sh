@@ -180,18 +180,41 @@ echo "-------------------------------------------------"
 # Read the SSH private key
 SSH_PRIVATE_KEY=$(cat "$SSH_KEY_FILE")
 
-# Get current team vault and update it with the SSH private key
+# Get current team vault via GetCompanyTeams
 echo "Fetching current team vault..."
-CURRENT_TEAM_VAULT=$(_run_cli_command inspect team "${SYSTEM_DEFAULT_TEAM_NAME}" --output json | jq -r '.teamVault')
+TEAMS_RESPONSE=$(_run_cli_command GetCompanyTeams --output json)
 
-# Update team vault with new SSH private key
-UPDATED_TEAM_VAULT=$(echo "$CURRENT_TEAM_VAULT" | jq --arg key "$SSH_PRIVATE_KEY" '.SSH_PRIVATE_KEY = $key')
+if [ $? -ne 0 ]; then
+    echo "Error: Could not fetch teams"
+    exit 1
+fi
 
-# Update the team with the new vault
+# Find the team in the response and extract vault + version
+TEAM_DATA=$(echo "$TEAMS_RESPONSE" | jq -r --arg team "$SYSTEM_DEFAULT_TEAM_NAME" '
+    .resultSets[1].data[] | select(.TeamName == $team) |
+    {vault: .TeamVault, version: .VaultVersion}
+')
+
+if [ -z "$TEAM_DATA" ] || [ "$TEAM_DATA" = "null" ]; then
+    echo "Error: Could not find team '$SYSTEM_DEFAULT_TEAM_NAME'"
+    exit 1
+fi
+
+CURRENT_VAULT=$(echo "$TEAM_DATA" | jq -r '.vault')
+VAULT_VERSION=$(echo "$TEAM_DATA" | jq -r '.version')
+
+echo "Current vault version: $VAULT_VERSION"
+
+# Update vault with SSH private key
+UPDATED_VAULT=$(echo "$CURRENT_VAULT" | jq --arg key "$SSH_PRIVATE_KEY" '.SSH_PRIVATE_KEY = $key')
+
+# Call UpdateTeamVault via CLI dynamic endpoint
 echo "Updating team vault with runner's SSH key..."
-if _run_cli_command UpdateTeam \
-    --teamName "${SYSTEM_DEFAULT_TEAM_NAME}" \
-    --teamVault "$UPDATED_TEAM_VAULT"; then
+if _run_cli_command UpdateTeamVault \
+    --teamName "$SYSTEM_DEFAULT_TEAM_NAME" \
+    --teamVault "$UPDATED_VAULT" \
+    --vaultVersion "$VAULT_VERSION" \
+    --output json >/dev/null 2>&1; then
     echo "✓ Team vault updated with SSH private key"
 else
     echo "Warning: Could not update team vault. Bridge may not be able to connect."
