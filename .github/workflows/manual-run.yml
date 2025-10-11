@@ -25,6 +25,11 @@ on:
         required: false
         default: false
         type: boolean
+      authorized-keys-repo:
+        description: 'Private repo with authorized SSH keys (format: owner/repo)'
+        required: false
+        default: 'rediacc/authorized-keys'
+        type: string
 
   push:
     branches:
@@ -97,7 +102,7 @@ jobs:
         with:
           timeout: 60
           limit-access-to-actor: true
-          authorized-keys-repo: 'rediacc/authorized-keys'
+          authorized-keys-repo: ${{ github.event.inputs.authorized-keys-repo || 'rediacc/authorized-keys' }}
 
       - name: Display Access Information
         run: |
