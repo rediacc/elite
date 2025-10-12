@@ -258,9 +258,22 @@ echo ""
 echo "Step 6: Queueing machine setup task"
 echo "------------------------------------"
 
+# Fetch company and team vault data for setup task
+echo "Fetching company and team vault data..."
+TEAMS_RESPONSE=$(_run_cli_command GetCompanyTeams --output json)
+
+if [ $? -ne 0 ]; then
+    echo "Error: Could not fetch company and team data"
+    exit 1
+fi
+
+# Extract vault content as JSON strings
+COMPANY_VAULT_STR=$(echo "$TEAMS_RESPONSE" | jq -r '.data.result[0].companyVaultContent')
+TEAM_VAULT_STR=$(echo "$TEAMS_RESPONSE" | jq -r '.data.result[0].vaultContent')
+
 # Queue a setup task for the localhost machine
 # This will install required tools (btrfs-progs, docker, rclone, etc.)
-echo "Creating setup queue item..."
+echo "Creating setup queue item with full vault data..."
 SETUP_VAULT=$(jq -n \
     --arg team "$SYSTEM_DEFAULT_TEAM_NAME" \
     --arg machine "$MACHINE_NAME" \
@@ -268,10 +281,11 @@ SETUP_VAULT=$(jq -n \
     --arg user "$MACHINE_USER" \
     --arg datastore "$MACHINE_DATASTORE" \
     --arg host_entry "$HOST_KEY" \
-    --arg ssh_private_key "$SSH_PRIVATE_KEY_B64" \
-    --arg ssh_public_key "$SSH_PUBLIC_KEY_B64" \
+    --arg api_url "$SYSTEM_API_URL" \
+    --argjson company_vault "$COMPANY_VAULT_STR" \
+    --argjson team_vault "$TEAM_VAULT_STR" \
     '{
-        function: "os_setup",
+        function: "setup",
         machine: $machine,
         team: $team,
         params: {
@@ -283,10 +297,17 @@ SETUP_VAULT=$(jq -n \
             install_nvidia_driver: "auto"
         },
         contextData: {
-            GENERAL_SETTINGS: {
-                SSH_PRIVATE_KEY: $ssh_private_key,
-                SSH_PUBLIC_KEY: $ssh_public_key
-            },
+            GENERAL_SETTINGS: ($company_vault + $team_vault + {
+                SYSTEM_API_URL: $api_url,
+                MACHINES: {
+                    ($machine): {
+                        IP: $ip,
+                        USER: $user,
+                        DATASTORE: $datastore,
+                        HOST_ENTRY: $host_entry
+                    }
+                }
+            }),
             MACHINES: {
                 ($machine): {
                     IP: $ip,
@@ -294,7 +315,8 @@ SETUP_VAULT=$(jq -n \
                     DATASTORE: $datastore,
                     HOST_ENTRY: $host_entry
                 }
-            }
+            },
+            company: $company_vault
         }
     }')
 
