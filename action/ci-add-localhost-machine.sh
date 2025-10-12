@@ -258,22 +258,44 @@ echo ""
 echo "Step 6: Queueing machine setup task"
 echo "------------------------------------"
 
-# Fetch company and team vault data for setup task
-echo "Fetching company and team vault data..."
-TEAMS_RESPONSE=$(_run_cli_command GetCompanyTeams --output json)
+# Fetch company credential and vault data
+echo "Fetching company credential..."
+COMPANY_RESPONSE=$(_run_cli_command GetCompanyVault --output json)
 
 if [ $? -ne 0 ]; then
-    echo "Error: Could not fetch company and team data"
+    echo "Error: Could not fetch company vault data"
     exit 1
 fi
 
-# Extract vault content as JSON strings
-COMPANY_VAULT_STR=$(echo "$TEAMS_RESPONSE" | jq -r '.data.result[0].companyVaultContent')
-TEAM_VAULT_STR=$(echo "$TEAMS_RESPONSE" | jq -r '.data.result[0].vaultContent')
+# Extract company credential (becomes COMPANY_ID)
+COMPANY_CREDENTIAL=$(echo "$COMPANY_RESPONSE" | jq -r '.data.result[0].companyCredential // .data.result[0].CompanyCredential')
+COMPANY_VAULT_STR=$(echo "$COMPANY_RESPONSE" | jq -r '.data.result[0].vaultContent // .data.result[0].VaultContent')
+
+echo "Company credential: ${COMPANY_CREDENTIAL:0:8}..."
+
+# Fetch team vault data
+echo "Fetching team vault data..."
+TEAMS_RESPONSE=$(_run_cli_command GetCompanyTeams --output json)
+
+if [ $? -ne 0 ]; then
+    echo "Error: Could not fetch teams data"
+    exit 1
+fi
+
+# Find the default team and extract its vault
+TEAM_VAULT_STR=$(echo "$TEAMS_RESPONSE" | jq -r --arg team "$SYSTEM_DEFAULT_TEAM_NAME" '
+    .data.result[] | select(.teamName == $team or .TeamName == $team) | (.vaultContent // .VaultContent)
+')
 
 # Queue a setup task for the localhost machine
 # This will install required tools (btrfs-progs, docker, rclone, etc.)
 echo "Creating setup queue item with full vault data..."
+
+# Parse vaults and add COMPANY_ID
+COMPANY_VAULT_JSON=$(echo "$COMPANY_VAULT_STR" | jq --arg id "$COMPANY_CREDENTIAL" '. + {COMPANY_ID: $id}')
+TEAM_VAULT_JSON=$(echo "$TEAM_VAULT_STR" | jq '.')
+
+# Build the setup vault with proper structure
 SETUP_VAULT=$(jq -n \
     --arg team "$SYSTEM_DEFAULT_TEAM_NAME" \
     --arg machine "$MACHINE_NAME" \
@@ -282,8 +304,8 @@ SETUP_VAULT=$(jq -n \
     --arg datastore "$MACHINE_DATASTORE" \
     --arg host_entry "$HOST_KEY" \
     --arg api_url "$SYSTEM_API_URL" \
-    --argjson company_vault "$COMPANY_VAULT_STR" \
-    --argjson team_vault "$TEAM_VAULT_STR" \
+    --argjson company_vault "$COMPANY_VAULT_JSON" \
+    --argjson team_vault "$TEAM_VAULT_JSON" \
     '{
         function: "setup",
         machine: $machine,
