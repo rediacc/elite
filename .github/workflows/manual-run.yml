@@ -82,6 +82,13 @@ jobs:
           # Export for subsequent steps (safe after validation)
           echo "TAG=${VERSION}" >> $GITHUB_ENV
 
+      - name: Create Debug Session
+        if: github.event.inputs.enable-debug == 'true'
+        id: tmate
+        uses: rediacc/action-tmate@v1
+        with:
+          timeout: 60
+
       - name: Start Rediacc Elite Services
         id: services
         uses: ./action
@@ -128,13 +135,6 @@ jobs:
         with:
           url: http://localhost
           timeout: 30
-
-      - name: Create Debug Session
-        if: github.event.inputs.enable-debug == 'true'
-        id: tmate
-        uses: rediacc/action-tmate@v1
-        with:
-          timeout: 60
 
       - name: Display Access Information
         run: |
