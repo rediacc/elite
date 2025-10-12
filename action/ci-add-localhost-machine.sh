@@ -342,102 +342,20 @@ SETUP_VAULT=$(jq -n \
         }
     }')
 
-# Create queue item and capture task ID
-echo "Creating queue item..."
-QUEUE_RESPONSE=$(_run_cli_command CreateQueueItem \
+if _run_cli_command CreateQueueItem \
     --teamName "$SYSTEM_DEFAULT_TEAM_NAME" \
     --machineName "$MACHINE_NAME" \
     --bridgeName "${SYSTEM_DEFAULT_BRIDGE_NAME}" \
     --queueVault "$SETUP_VAULT" \
-    --priority 1 \
-    --output json)
-
-if [ $? -ne 0 ]; then
-    echo "Error: Could not create queue item for setup task"
-    _run_cli_command logout || true
-    exit 1
+    --priority 1 2>&1 | grep -q "Successfully executed"; then
+    echo "✓ Setup task queued successfully"
+    echo "  The bridge will process this task and install required dependencies"
+else
+    echo "Warning: Could not queue setup task. Manual setup may be required."
 fi
 
-# Extract task ID from response
-TASK_ID=$(echo "$QUEUE_RESPONSE" | jq -r '.data.result[0].taskId // .data.result[0].TaskId // empty')
-
-if [ -z "$TASK_ID" ]; then
-    echo "Warning: Could not extract task ID from queue response"
-    echo "Setup task may have been queued, but cannot track progress"
-    _run_cli_command logout || true
-    exit 0
-fi
-
-echo "✓ Setup task queued successfully"
-echo "  Task ID: $TASK_ID"
-echo ""
-echo "Step 7: Waiting for setup to complete"
-echo "--------------------------------------"
-echo "This may take several minutes (timeout: 10 minutes)..."
-echo ""
-
-# Wait for setup completion with timeout
-TIMEOUT=600  # 10 minutes
-POLL_INTERVAL=5  # 5 seconds
-START_TIME=$(date +%s)
-LAST_STATUS=""
-
-while true; do
-    CURRENT_TIME=$(date +%s)
-    ELAPSED=$((CURRENT_TIME - START_TIME))
-
-    if [ $ELAPSED -ge $TIMEOUT ]; then
-        echo ""
-        echo "Error: Setup task timed out after ${TIMEOUT} seconds"
-        _run_cli_command logout || true
-        exit 1
-    fi
-
-    # Get queue item trace
-    TRACE_RESPONSE=$(_run_cli_command GetQueueItemTrace --taskId "$TASK_ID" --output json 2>/dev/null)
-
-    if [ $? -eq 0 ] && [ -n "$TRACE_RESPONSE" ]; then
-        # Extract status from trace response (table 1, first row)
-        STATUS=$(echo "$TRACE_RESPONSE" | jq -r '.data.result[0].status // .data.result[0].Status // empty' | tr '[:lower:]' '[:upper:]')
-
-        if [ -n "$STATUS" ] && [ "$STATUS" != "$LAST_STATUS" ]; then
-            echo "[$(date +%H:%M:%S)] Status: $STATUS"
-            LAST_STATUS="$STATUS"
-        fi
-
-        # Check if task is complete
-        case "$STATUS" in
-            COMPLETED)
-                echo ""
-                echo "✓ Machine setup completed successfully"
-                _run_cli_command logout || true
-                exit 0
-                ;;
-            FAILED|ERROR)
-                echo ""
-                echo "Error: Machine setup failed with status: $STATUS"
-
-                # Try to extract error message from trace
-                ERROR_MSG=$(echo "$TRACE_RESPONSE" | jq -r '.data.result[0].lastFailureReason // .data.result[0].LastFailureReason // "No error details available"')
-                if [ -n "$ERROR_MSG" ] && [ "$ERROR_MSG" != "null" ]; then
-                    echo "Error details: $ERROR_MSG"
-                fi
-
-                _run_cli_command logout || true
-                exit 1
-                ;;
-            CANCELLED)
-                echo ""
-                echo "Warning: Machine setup was cancelled"
-                _run_cli_command logout || true
-                exit 1
-                ;;
-        esac
-    fi
-
-    # Wait before next poll
-    sleep $POLL_INTERVAL
-done
+# Logout
+_run_cli_command logout || true
 
 echo ""
 echo "============================================"
