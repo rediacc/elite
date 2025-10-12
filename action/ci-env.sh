@@ -36,7 +36,8 @@ fi
 # Export configuration from .env (now available after sourcing)
 export SYSTEM_DOMAIN="${SYSTEM_DOMAIN}"
 export DOCKER_REGISTRY="${DOCKER_REGISTRY}"
-export TAG="${TAG}"
+# Use TAG from environment if set (e.g., from workflow), otherwise use value from .env
+export TAG="${TAG:-latest}"
 
 # Ensure DOCKER_BRIDGE_IMAGE includes the tag (required for middleware to create bridge containers)
 export DOCKER_BRIDGE_IMAGE="${DOCKER_REGISTRY}/bridge:${TAG}"
