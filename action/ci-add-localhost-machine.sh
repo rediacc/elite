@@ -264,12 +264,16 @@ echo "Creating setup queue item..."
 SETUP_VAULT=$(jq -n \
     --arg team "$SYSTEM_DEFAULT_TEAM_NAME" \
     --arg machine "$MACHINE_NAME" \
-    --arg bridge "${SYSTEM_DEFAULT_BRIDGE_NAME}" \
+    --arg ip "$MACHINE_IP" \
+    --arg user "$MACHINE_USER" \
+    --arg datastore "$MACHINE_DATASTORE" \
+    --arg host_entry "$HOST_KEY" \
+    --arg ssh_private_key "$SSH_PRIVATE_KEY_B64" \
+    --arg ssh_public_key "$SSH_PUBLIC_KEY_B64" \
     '{
         function: "setup",
-        teamName: $team,
-        machineName: $machine,
-        bridgeName: $bridge,
+        machine: $machine,
+        team: $team,
         params: {
             datastore_size: "95%",
             source: "apt-repo",
@@ -277,6 +281,20 @@ SETUP_VAULT=$(jq -n \
             docker_source: "docker-repo",
             install_amd_driver: "auto",
             install_nvidia_driver: "auto"
+        },
+        contextData: {
+            GENERAL_SETTINGS: {
+                SSH_PRIVATE_KEY: $ssh_private_key,
+                SSH_PUBLIC_KEY: $ssh_public_key
+            },
+            MACHINES: {
+                ($machine): {
+                    IP: $ip,
+                    USER: $user,
+                    DATASTORE: $datastore,
+                    HOST_ENTRY: $host_entry
+                }
+            }
         }
     }')
 
