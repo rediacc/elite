@@ -271,7 +271,7 @@ SETUP_VAULT=$(jq -n \
     --arg ssh_private_key "$SSH_PRIVATE_KEY_B64" \
     --arg ssh_public_key "$SSH_PUBLIC_KEY_B64" \
     '{
-        function: "setup",
+        function: "os_setup",
         machine: $machine,
         team: $team,
         params: {
