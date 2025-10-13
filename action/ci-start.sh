@@ -25,8 +25,7 @@ echo "Services are ready!"
 # Add localhost as a machine for CI testing
 echo ""
 echo "Registering localhost as 'local' machine..."
-# Filter output to prevent special characters in error messages from breaking bash parsing
-action/ci-add-localhost-machine.sh 2>&1 | grep -E "^(✓|✗|Warning|Error|Step|====)" || {
+action/ci-add-localhost-machine.sh || {
   echo "Warning: Could not register localhost machine. Tests requiring machine access may fail."
 }
 
