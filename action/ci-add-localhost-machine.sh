@@ -51,13 +51,16 @@ if ! command -v rediacc &> /dev/null; then
     else
         # If version starts with comparison operator (>=, ==, ~=, etc.), use as-is
         # Otherwise, add == for exact version match
-        if [[ "$CLI_VERSION" =~ ^[><=~!] ]]; then
-            echo "Installing rediacc CLI with constraint: $CLI_VERSION..."
-            pip install --quiet "rediacc${CLI_VERSION}"
-        else
-            echo "Installing rediacc CLI version: $CLI_VERSION..."
-            pip install --quiet "rediacc==$CLI_VERSION"
-        fi
+        case "$CLI_VERSION" in
+            [\>\<\=\~\!]*)
+                echo "Installing rediacc CLI with constraint: $CLI_VERSION..."
+                pip install --quiet "rediacc${CLI_VERSION}"
+                ;;
+            *)
+                echo "Installing rediacc CLI version: $CLI_VERSION..."
+                pip install --quiet "rediacc==$CLI_VERSION"
+                ;;
+        esac
     fi
     echo "✓ rediacc CLI installed"
 else
