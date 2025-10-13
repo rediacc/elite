@@ -25,6 +25,11 @@ on:
         required: false
         default: 'latest'
         type: string
+      cli-version:
+        description: 'Rediacc CLI pip package version (e.g., latest, 0.1.67, >=0.1.67)'
+        required: false
+        default: 'latest'
+        type: string
       enable-debug:
         description: 'Enable tmate SSH debugging session'
         required: false
@@ -150,6 +155,8 @@ jobs:
         uses: ./action
         with:
           keep-alive: true  # Don't auto-cleanup, we'll handle it manually
+        env:
+          REDIACC_CLI_VERSION: ${{ github.event.inputs.cli-version || 'latest' }}
 
       - name: Display Service Information
         run: |

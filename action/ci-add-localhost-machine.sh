@@ -42,8 +42,23 @@ fi
 
 # Install rediacc CLI from PyPI if not already installed
 if ! command -v rediacc &> /dev/null; then
-    echo "Installing rediacc CLI from PyPI..."
-    pip install --quiet rediacc
+    # Use REDIACC_CLI_VERSION env var if set, otherwise install latest
+    CLI_VERSION="${REDIACC_CLI_VERSION:-latest}"
+
+    if [ "$CLI_VERSION" = "latest" ]; then
+        echo "Installing latest rediacc CLI from PyPI..."
+        pip install --quiet rediacc
+    else
+        # If version starts with comparison operator (>=, ==, ~=, etc.), use as-is
+        # Otherwise, add == for exact version match
+        if [[ "$CLI_VERSION" =~ ^[><=~!] ]]; then
+            echo "Installing rediacc CLI with constraint: $CLI_VERSION..."
+            pip install --quiet "rediacc${CLI_VERSION}"
+        else
+            echo "Installing rediacc CLI version: $CLI_VERSION..."
+            pip install --quiet "rediacc==$CLI_VERSION"
+        fi
+    fi
     echo "✓ rediacc CLI installed"
 else
     echo "✓ rediacc CLI already installed"
