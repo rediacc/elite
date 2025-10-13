@@ -79,8 +79,60 @@ jobs:
             echo "⚠️  Warning: Version ${VERSION} not found in registry (continuing anyway)"
           fi
 
+          # Logout immediately after verification
+          docker logout ghcr.io
+
           # Export for subsequent steps (safe after validation)
           echo "TAG=${VERSION}" >> $GITHUB_ENV
+
+      - name: Pre-pull Docker Images
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🔐 Pre-pulling Docker images with temporary authentication..."
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+          # Use a subshell to contain credential exposure
+          (
+            # Set up environment for image resolution
+            export GITHUB_TOKEN="${{ secrets.GITHUB_TOKEN }}"
+            export GITHUB_ACTOR="${{ github.actor }}"
+            export TAG="${{ env.TAG }}"
+
+            # Source configuration to get registry and image names
+            source action/ci-env.sh
+            source .env
+
+            # Authenticate to registry
+            echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+
+            # Pull all required images
+            echo "Pulling nginx:${TAG}..."
+            docker pull "${DOCKER_REGISTRY}/nginx:${TAG}"
+
+            echo "Pulling api:${TAG}..."
+            docker pull "${DOCKER_REGISTRY}/api:${TAG}"
+
+            echo "Pulling sql-server:${TAG}..."
+            docker pull "${DOCKER_REGISTRY}/sql-server:${TAG}"
+
+            echo "Pulling bridge image..."
+            docker pull "${DOCKER_BRIDGE_IMAGE}"
+
+            echo "✅ All images pulled successfully"
+          )
+
+          # Cleanup credentials completely (outside subshell)
+          echo ""
+          echo "🧹 Removing all Docker credentials..."
+          docker logout ghcr.io
+          rm -f ~/.docker/config.json
+
+          # Clear any cached credentials
+          unset GITHUB_TOKEN
+          unset DOCKER_REGISTRY_PASSWORD
+
+          echo "✅ Credentials cleaned - environment is now safe for debug access"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
       - name: Create Debug Session
         if: github.event.inputs.enable-debug == 'true'
@@ -89,12 +141,13 @@ jobs:
         with:
           timeout: 60
 
+      # SECURITY NOTE: tmate debug session is started BEFORE services
+      # This ensures no GITHUB_TOKEN is present in the environment when debug access is available
+      # All required images have been pre-pulled, so no authentication is needed from this point forward
+
       - name: Start Rediacc Elite Services
         id: services
         uses: ./action
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_ACTOR: ${{ github.actor }}
         with:
           keep-alive: true  # Don't auto-cleanup, we'll handle it manually
 
