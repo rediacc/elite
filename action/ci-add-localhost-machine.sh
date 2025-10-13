@@ -41,7 +41,15 @@ elif [ -f "$SSH_DIR/id_rsa" ]; then
 fi
 
 # Install rediacc CLI from PyPI if not already installed
-if ! command -v rediacc &> /dev/null; then
+# Skip installation if REDIACC_SKIP_CLI_INSTALL is set (e.g., when testing local CLI changes)
+if [ "$REDIACC_SKIP_CLI_INSTALL" = "true" ]; then
+    echo "⚠ Skipping CLI installation (REDIACC_SKIP_CLI_INSTALL=true)"
+    if ! command -v rediacc &> /dev/null; then
+        echo "Error: REDIACC_SKIP_CLI_INSTALL is set but rediacc CLI is not installed"
+        exit 1
+    fi
+    echo "✓ Using existing rediacc CLI installation"
+elif ! command -v rediacc &> /dev/null; then
     # Use REDIACC_CLI_VERSION env var if set, otherwise install latest
     CLI_VERSION="${REDIACC_CLI_VERSION:-latest}"
 
