@@ -234,9 +234,59 @@ _check_and_pull_images() {
     return 0
 }
 
+# Cleanup bridge containers matching SYSTEM_COMPANY_NAME
+cleanup_bridge_containers() {
+    # Only proceed if SYSTEM_COMPANY_NAME is set
+    if [ -z "$SYSTEM_COMPANY_NAME" ]; then
+        echo "SYSTEM_COMPANY_NAME not set, skipping bridge container cleanup"
+        return 0
+    fi
+
+    echo "Cleaning up bridge containers for company: $SYSTEM_COMPANY_NAME"
+
+    # Sanitize company name same way as C# code (lowercase, replace non-alphanumeric with underscore)
+    local sanitized_name=$(echo "$SYSTEM_COMPANY_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
+    local container_name_pattern="bridge_${sanitized_name}"
+
+    # Find containers by label
+    local containers_by_label=$(docker ps -a --filter "label=rediacc.company=$SYSTEM_COMPANY_NAME" --format "{{.ID}}\t{{.Names}}" 2>/dev/null)
+
+    # Find containers by name pattern
+    local containers_by_name=$(docker ps -a --filter "name=${container_name_pattern}" --format "{{.ID}}\t{{.Names}}" 2>/dev/null)
+
+    # Combine and deduplicate container IDs
+    local all_containers=$(echo -e "${containers_by_label}\n${containers_by_name}" | sort -u | grep -v '^$')
+
+    if [ -z "$all_containers" ]; then
+        echo "No bridge containers found for company: $SYSTEM_COMPANY_NAME"
+        return 0
+    fi
+
+    # Remove each container
+    local removed_count=0
+    while IFS=$'\t' read -r container_id container_name; do
+        if [ -n "$container_id" ]; then
+            echo "  Removing container: $container_name ($container_id)"
+            docker rm -f "$container_id" >/dev/null 2>&1
+            if [ $? -eq 0 ]; then
+                ((removed_count++))
+            else
+                echo "  Warning: Failed to remove container $container_name"
+            fi
+        fi
+    done <<< "$all_containers"
+
+    if [ $removed_count -gt 0 ]; then
+        echo "✓ Removed $removed_count bridge container(s) for company: $SYSTEM_COMPANY_NAME"
+    fi
+}
+
 # Function to start services
 up() {
     echo "Starting elite core services..."
+
+    # Cleanup bridge containers before starting services
+    cleanup_bridge_containers
 
     # Check if images exist, pull if missing
     _check_and_pull_images || return 1
@@ -254,6 +304,9 @@ down() {
     echo "Stopping elite core services..."
     # Stop services using the helper function
     _docker_compose down "$@"
+
+    # Cleanup bridge containers after stopping services
+    cleanup_bridge_containers
 }
 
 # Function to show logs
