@@ -288,15 +288,66 @@ up() {
     # Cleanup bridge containers before starting services
     cleanup_bridge_containers
 
-    # Check if images exist, pull if missing
-    _check_and_pull_images || return 1
+    # Check if images exist, pull if missing (skip SQL image check if using shared SQL)
+    if [ "${SQL_MODE}" = "shared" ]; then
+        echo "SQL Mode: shared (using rediacc-shared-sql)"
+        # Skip SQL image check for shared mode
+        local temp_images=(
+            "${DOCKER_REGISTRY}/nginx:${TAG}"
+            "${DOCKER_REGISTRY}/api:${TAG}"
+            "${DOCKER_BRIDGE_IMAGE}"
+        )
+        _check_and_pull_images_custom "${temp_images[@]}" || return 1
+    else
+        echo "SQL Mode: dedicated (using instance-specific SQL)"
+        _check_and_pull_images || return 1
+    fi
 
     # Networks are managed differently based on mode:
     # - Standalone mode (no INSTANCE_NAME): docker-compose creates networks (external: false)
     # - Cloud mode (with INSTANCE_NAME): networks pre-created by cloud/go (external: true)
 
-    # Start services using the helper function
-    _docker_compose up -d "$@"
+    # Start services - exclude SQL service if in shared mode
+    if [ "${SQL_MODE}" = "shared" ]; then
+        echo "Skipping dedicated SQL service (using shared SQL Server)"
+        # Use --no-deps to prevent docker-compose from starting the sql dependency
+        _docker_compose up -d --no-deps nginx api "$@"
+    else
+        _docker_compose up -d "$@"
+    fi
+}
+
+# Helper function for custom image checking (used in shared SQL mode)
+_check_and_pull_images_custom() {
+    local images=("$@")
+    local missing_images=()
+
+    # Check which images are missing
+    for image in "${images[@]}"; do
+        if ! docker image inspect "$image" >/dev/null 2>&1; then
+            missing_images+=("$image")
+        fi
+    done
+
+    # If images are missing, attempt to pull them
+    if [ ${#missing_images[@]} -gt 0 ]; then
+        echo "Missing images detected. Attempting to pull..."
+
+        # Ensure we're logged in to the registry
+        _ensure_registry_login
+
+        # Pull each missing image
+        for image in "${missing_images[@]}"; do
+            echo "Pulling $image..."
+            if ! docker pull "$image"; then
+                echo "Error: Failed to pull $image"
+                echo "Please ensure the image exists in the registry or build it locally"
+                return 1
+            fi
+        done
+    fi
+
+    return 0
 }
 
 # Function to stop services
