@@ -117,9 +117,6 @@ jobs:
             echo "Pulling api:${TAG}..."
             docker pull "${DOCKER_REGISTRY}/api:${TAG}"
 
-            echo "Pulling sql-server:${TAG}..."
-            docker pull "${DOCKER_REGISTRY}/sql-server:${TAG}"
-
             echo "Pulling bridge image..."
             docker pull "${DOCKER_BRIDGE_IMAGE}"
 

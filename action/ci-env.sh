@@ -59,6 +59,7 @@ export DOCKER_BRIDGE_API_URL="http://localhost"
 export MSSQL_SA_PASSWORD="$(generate_password)"
 export MSSQL_RA_PASSWORD="$(generate_password)"
 export REDIACC_DATABASE_NAME="${REDIACC_DATABASE_NAME:-RediaccMiddleware}"
+export REDIACC_SQL_USERNAME="${REDIACC_SQL_USERNAME:-rediacc}"
 
 # Mask passwords in GitHub Actions logs
 if [ -n "$GITHUB_ACTIONS" ]; then
@@ -67,7 +68,7 @@ if [ -n "$GITHUB_ACTIONS" ]; then
 fi
 
 # Build connection string (same format as go script)
-export CONNECTION_STRING="Server=sql,1433;Database=${REDIACC_DATABASE_NAME};User Id=rediacc;Password=\"${MSSQL_RA_PASSWORD}\";TrustServerCertificate=True;Application Name=${REDIACC_DATABASE_NAME};Max Pool Size=32;Min Pool Size=2;Connection Lifetime=120;Connection Timeout=15;Command Timeout=30;Pooling=true;MultipleActiveResultSets=false;Packet Size=32768"
+export CONNECTION_STRING="Server=sql,1433;Database=${REDIACC_DATABASE_NAME};User Id=${REDIACC_SQL_USERNAME};Password=\"${MSSQL_RA_PASSWORD}\";TrustServerCertificate=True;Application Name=${REDIACC_DATABASE_NAME};Max Pool Size=32;Min Pool Size=2;Connection Lifetime=120;Connection Timeout=15;Command Timeout=30;Pooling=true;MultipleActiveResultSets=false;Packet Size=32768"
 
 # Don't set INSTANCE_NAME for CI - use standalone mode with auto-created networks
 # Cloud mode (INSTANCE_NAME set) requires pre-existing external networks which CI doesn't have
