@@ -14,6 +14,11 @@ _docker_compose() {
         cmd="$cmd -f docker-compose.standalone.yml"
     fi
 
+    # CI mode: use anonymous volumes to avoid permission issues with SQL Server
+    if [ -n "$GITHUB_ACTIONS" ]; then
+        cmd="$cmd -f docker-compose.ci.yml"
+    fi
+
     # Add project name if instance name is set (cloud mode)
     if [ -n "$INSTANCE_NAME" ]; then
         cmd="$cmd --project-name $INSTANCE_NAME"
@@ -84,6 +89,7 @@ if [ ! -f ".env.secret" ]; then
 MSSQL_SA_PASSWORD="${SA_RANDOM_PASSWORD}"
 MSSQL_RA_PASSWORD="${RA_RANDOM_PASSWORD}"
 REDIACC_DATABASE_NAME="${DB_NAME}"
+REDIACC_SQL_USERNAME="rediacc"
 CONNECTION_STRING="Server=sql,1433;Database=${DB_NAME};User Id=rediacc;Password=\"${RA_RANDOM_PASSWORD}\";TrustServerCertificate=True;Application Name=${DB_NAME};Max Pool Size=32;Min Pool Size=2;Connection Lifetime=120;Connection Timeout=15;Command Timeout=30;Pooling=true;MultipleActiveResultSets=false;Packet Size=32768"
 EOF
     

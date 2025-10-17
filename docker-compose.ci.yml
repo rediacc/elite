@@ -1,0 +1,10 @@
+# Docker Compose override for CI/CD environments
+# This file is used in GitHub Actions to avoid file permission issues
+# with SQL Server 2022+ which runs as non-root (UID 10001)
+
+services:
+  sql:
+    volumes:
+      # Use anonymous volume instead of bind mount to avoid permission issues
+      # CI doesn't need to persist SQL data between runs
+      - /var/opt/mssql
