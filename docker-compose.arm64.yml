@@ -1,0 +1,12 @@
+# Docker Compose override for ARM64 architecture
+# This file provides Azure SQL Edge for ARM64 systems
+# Usage: Set SQL_BASE_IMAGE=mcr.microsoft.com/azure-sql-edge:latest in .env
+
+services:
+  sql:
+    # Override SQL Server image for ARM64 architecture
+    # Azure SQL Edge is Microsoft's ARM64-compatible version of SQL Server
+    image: mcr.microsoft.com/azure-sql-edge:latest
+    environment:
+      # Azure SQL Edge requires MSSQL_PID=Developer
+      - MSSQL_PID=Developer

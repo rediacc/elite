@@ -27,7 +27,20 @@ services:
       - DOCKER_INTERNET_NETWORK=${INSTANCE_NAME:+${INSTANCE_NAME}_}rediacc_internet
       - DOCKER_BRIDGE_NETWORK_MODE=${DOCKER_BRIDGE_NETWORK_MODE}
       - DOCKER_BRIDGE_API_URL=${DOCKER_BRIDGE_API_URL}
+      # Database initialization variables (API now handles DB init)
+      - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD}
+      - MSSQL_RA_PASSWORD=${MSSQL_RA_PASSWORD}
+      - MSSQL_STRIPE_PASSWORD=${MSSQL_STRIPE_PASSWORD}
+      - REDIACC_DATABASE_NAME=${REDIACC_DATABASE_NAME}
+      - REDIACC_SQL_USERNAME=${REDIACC_SQL_USERNAME}
+      - SYSTEM_ADMIN_EMAIL=${SYSTEM_ADMIN_EMAIL}
+      - SYSTEM_ADMIN_PASSWORD=${SYSTEM_ADMIN_PASSWORD}
+      - SYSTEM_COMPANY_NAME=${SYSTEM_COMPANY_NAME}
       - SYSTEM_COMPANY_VAULT_DEFAULTS=${SYSTEM_COMPANY_VAULT_DEFAULTS}
+      - SYSTEM_DEFAULT_BRIDGE_NAME=${SYSTEM_DEFAULT_BRIDGE_NAME}
+      - SYSTEM_DEFAULT_REGION_NAME=${SYSTEM_DEFAULT_REGION_NAME}
+      - SYSTEM_DEFAULT_TEAM_NAME=${SYSTEM_DEFAULT_TEAM_NAME}
+      - INSTANCE_NAME=${INSTANCE_NAME}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
@@ -41,27 +54,13 @@ services:
     restart: unless-stopped
 
   sql:
-    image: ${DOCKER_REGISTRY}/sql-server:${TAG}
-    pull_policy: never
+    image: ${SQL_BASE_IMAGE:-mcr.microsoft.com/mssql/server:2022-CU18-ubuntu-20.04}
     container_name: ${INSTANCE_NAME:-rediacc}-sql
     hostname: ${INSTANCE_NAME:-rediacc}-sql
     environment:
       - ACCEPT_EULA=Y
       - MSSQL_PID=Express
-      - MSSQL_MEMORY_LIMIT_MB=${MSSQL_MEMORY_LIMIT_MB:-2048}
-      - MSSQL_RA_PASSWORD=${MSSQL_RA_PASSWORD}
       - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD}
-      - REDIACC_DATABASE_NAME=${REDIACC_DATABASE_NAME}
-      - REDIACC_SQL_USERNAME=${REDIACC_SQL_USERNAME}
-      - INSTANCE_NAME=${INSTANCE_NAME}
-      - SYSTEM_ADMIN_EMAIL=${SYSTEM_ADMIN_EMAIL}
-      - SYSTEM_ADMIN_PASSWORD=${SYSTEM_ADMIN_PASSWORD}
-      - SYSTEM_COMPANY_NAME=${SYSTEM_COMPANY_NAME}
-      - SYSTEM_COMPANY_VAULT_DEFAULTS=${SYSTEM_COMPANY_VAULT_DEFAULTS}
-      - SYSTEM_DEFAULT_BRIDGE_NAME=${SYSTEM_DEFAULT_BRIDGE_NAME}
-      - SYSTEM_DEFAULT_REGION_NAME=${SYSTEM_DEFAULT_REGION_NAME}
-      - SYSTEM_DEFAULT_TEAM_NAME=${SYSTEM_DEFAULT_TEAM_NAME}
-      - TZ=Europe/Berlin
     volumes:
       - ${INSTANCE_DATA_PATH:-./}/mssql:/var/opt/mssql
     networks:
@@ -69,6 +68,12 @@ services:
         aliases:
           - rediacc-sql
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q 'SELECT 1' -C || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
 
 networks:
   internet:

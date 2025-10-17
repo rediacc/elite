@@ -96,7 +96,8 @@ act -j test -s DOCKER_REGISTRY_USERNAME -s DOCKER_REGISTRY_PASSWORD
 Ensure your Docker registry credentials are correct and the images exist at:
 - `${DOCKER_REGISTRY}/rediacc/nginx:${TAG}`
 - `${DOCKER_REGISTRY}/rediacc/api:${TAG}`
-- `${DOCKER_REGISTRY}/rediacc/sql-server:${TAG}`
+
+Note: SQL Server uses standard Microsoft images from mcr.microsoft.com, not the custom registry.
 
 ## How It Works
 

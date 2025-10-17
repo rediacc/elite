@@ -170,7 +170,6 @@ _check_and_pull_images() {
     local images=(
         "${DOCKER_REGISTRY}/nginx:${TAG}"
         "${DOCKER_REGISTRY}/api:${TAG}"
-        "${DOCKER_REGISTRY}/sql-server:${TAG}"
         "${DOCKER_BRIDGE_IMAGE}"
     )
 
@@ -194,7 +193,7 @@ _check_and_pull_images() {
         if [ -f "./scripts/detect-base-image.sh" ]; then
             # Process each missing image to detect and prefetch its base image
             for image in "${missing_images[@]}"; do
-                # Extract image name (nginx, api, sql-server, bridge)
+                # Extract image name (nginx, api, bridge)
                 local image_name=$(echo "$image" | sed 's/.*\///' | sed 's/:.*//')
 
                 # Build detection command with optional authentication
