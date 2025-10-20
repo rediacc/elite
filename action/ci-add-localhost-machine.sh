@@ -24,7 +24,7 @@ fi
 MACHINE_NAME="local"
 MACHINE_IP="127.0.0.1"
 MACHINE_USER="${USER:-runner}"
-MACHINE_DATASTORE="/tmp/rediacc-datastore"
+MACHINE_DATASTORE="/mnt/datastore"
 SSH_DIR="$HOME/.ssh"
 
 # Find existing SSH key (prefer ed25519, then rsa)
