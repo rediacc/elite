@@ -145,9 +145,10 @@ echo ""
 echo "Step 2: Creating machine datastore"
 echo "-----------------------------------"
 
-# Create datastore directory
-mkdir -p "$MACHINE_DATASTORE"
-chmod 755 "$MACHINE_DATASTORE"
+# Create datastore directory (requires sudo for /mnt)
+sudo mkdir -p "$MACHINE_DATASTORE"
+sudo chown "$MACHINE_USER:$MACHINE_USER" "$MACHINE_DATASTORE"
+sudo chmod 755 "$MACHINE_DATASTORE"
 echo "✓ Created datastore at: $MACHINE_DATASTORE"
 
 echo ""
