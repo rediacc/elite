@@ -189,10 +189,10 @@ fi
 
 # Login to middleware (suppress output to avoid password leakage)
 echo "Logging in to middleware..."
-if ! _run_cli_command login --email "$SYSTEM_ADMIN_EMAIL" --password "$SYSTEM_ADMIN_PASSWORD" >/dev/null 2>&1; then
+if ! _run_cli_command auth login --endpoint "$SYSTEM_API_URL" --email "$SYSTEM_ADMIN_EMAIL" --password "$SYSTEM_ADMIN_PASSWORD" >/dev/null 2>&1; then
     echo "Error: Could not login to middleware"
     echo "Retrying with verbose output..."
-    _run_cli_command login --email "$SYSTEM_ADMIN_EMAIL" --password "$SYSTEM_ADMIN_PASSWORD"
+    _run_cli_command auth login --endpoint "$SYSTEM_API_URL" --email "$SYSTEM_ADMIN_EMAIL" --password "$SYSTEM_ADMIN_PASSWORD"
     exit 1
 fi
 echo "✓ Logged in successfully"
@@ -382,7 +382,7 @@ else
 fi
 
 # Logout
-_run_cli_command logout || true
+_run_cli_command auth logout || true
 
 echo ""
 echo "============================================"
