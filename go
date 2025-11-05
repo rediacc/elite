@@ -208,36 +208,6 @@ _check_and_pull_images() {
     if [ ${#missing_images[@]} -gt 0 ]; then
         echo "Missing images detected. Attempting to pull..."
 
-        # Detect and pull base images for bandwidth optimization
-        # This utilizes public CDNs (Docker Hub, Microsoft) for base layers
-        echo "Detecting base images for optimized download..."
-
-        if [ -f "./scripts/detect-base-image.sh" ]; then
-            # Process each missing image to detect and prefetch its base image
-            for image in "${missing_images[@]}"; do
-                # Extract image name (nginx, api, bridge)
-                local image_name=$(echo "$image" | sed 's/.*\///' | sed 's/:.*//')
-
-                # Build detection command with optional authentication
-                local DETECT_CMD="./scripts/detect-base-image.sh --quiet"
-                if [ -n "$DOCKER_REGISTRY_USERNAME" ] && [ -n "$DOCKER_REGISTRY_PASSWORD" ]; then
-                    DETECT_CMD="$DETECT_CMD --username \"$DOCKER_REGISTRY_USERNAME\" --password \"$DOCKER_REGISTRY_PASSWORD\""
-                fi
-                DETECT_CMD="$DETECT_CMD \"$image\""
-
-                # Try to detect base image (suppresses errors if registry unavailable)
-                local BASE_IMAGE=$(eval $DETECT_CMD 2>/dev/null || true)
-
-                # Pull base image if detected (always force fresh pull)
-                if [ -n "$BASE_IMAGE" ]; then
-                    echo "Pre-pulling base image for $image_name: $BASE_IMAGE"
-                    # Remove local image to force fresh pull from upstream
-                    docker rmi "$BASE_IMAGE" >/dev/null 2>&1 || true
-                    docker pull "$BASE_IMAGE" || echo "Warning: Failed to pre-pull $BASE_IMAGE (will continue)"
-                fi
-            done
-        fi
-
         # Ensure we're logged in to the registry
         _ensure_registry_login
 

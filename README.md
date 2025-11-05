@@ -155,6 +155,5 @@ The `./go up` command will:
 1. Check if required images exist locally
 2. If missing, authenticate with Docker registry
 3. Pull images from registry
-4. Pre-pull Microsoft SQL Server base image for bandwidth efficiency
 
 To pre-build images locally, see the main build system in `/go` at the repository root.
