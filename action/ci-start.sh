@@ -10,8 +10,8 @@ echo "Starting Rediacc Elite services..."
 source action/ci-env.sh
 
 # Start services
-# Note: go script automatically detects GITHUB_ACTIONS and uses docker-compose.ci.yml
-# which uses anonymous volumes to avoid SQL Server 2022+ permission issues
+# Note: go script automatically creates mssql directory with correct permissions
+# for SQL Server 2022+ which runs as non-root user (UID 10001)
 ./go up
 
 # Wait for services to be healthy

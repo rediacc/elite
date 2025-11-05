@@ -14,11 +14,6 @@ _docker_compose() {
         cmd="$cmd -f docker-compose.standalone.yml"
     fi
 
-    # CI mode: use anonymous volumes to avoid permission issues with SQL Server
-    if [ -n "$GITHUB_ACTIONS" ]; then
-        cmd="$cmd -f docker-compose.ci.yml"
-    fi
-
     # Add project name if instance name is set (cloud mode)
     if [ -n "$INSTANCE_NAME" ]; then
         cmd="$cmd --project-name $INSTANCE_NAME"
@@ -304,6 +299,27 @@ up() {
 
     # Cleanup bridge containers before starting services
     cleanup_bridge_containers
+
+    # Ensure SQL Server data directory exists with correct permissions
+    # Needed in standalone mode and CI (not cloud instances) when using dedicated SQL
+    if [ -z "$INSTANCE_NAME" ] && [ "${SQL_MODE}" != "shared" ]; then
+        if [ ! -d "./mssql" ]; then
+            echo "Creating SQL Server data directory..."
+            mkdir -p ./mssql
+            # SQL Server 2022+ runs as non-root user (UID 10001)
+            # Set ownership to allow SQL Server to write to the directory
+            if [ -n "$GITHUB_ACTIONS" ]; then
+                # In CI, running with sudo permissions
+                sudo chown 10001:10001 ./mssql
+            elif command -v sudo >/dev/null 2>&1; then
+                # Local development with sudo available
+                sudo chown 10001:10001 ./mssql
+            else
+                # If sudo not available (e.g., running as root), use chown directly
+                chown 10001:10001 ./mssql 2>/dev/null || echo "Warning: Could not set ownership on ./mssql directory"
+            fi
+        fi
+    fi
 
     # Check if images exist, pull if missing (skip SQL image check if using shared SQL)
     if [ "${SQL_MODE}" = "shared" ]; then
