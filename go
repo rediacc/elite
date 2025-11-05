@@ -630,6 +630,11 @@ switch() {
     # Export new TAG for this session
     export TAG="$new_version"
 
+    # Re-source .env to recompute DOCKER_BRIDGE_IMAGE with new TAG
+    set -a
+    source .env
+    set +a
+
     # Check if services are running
     if docker ps --format '{{.Names}}' | grep -q "${INSTANCE_NAME:-rediacc}-"; then
         echo ""
