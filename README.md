@@ -24,12 +24,14 @@ Services will be available at:
 ## Management Commands
 
 ```bash
-./go up           # Start all services
-./go down         # Stop all services
-./go status       # Show service status
-./go health       # Check if services are healthy
-./go logs nginx   # View logs for specific service
-./go restart api  # Restart a service
+./go up             # Start all services
+./go down           # Stop all services
+./go status         # Show service status
+./go health         # Check if services are healthy
+./go version        # Show current version information
+./go switch 0.2.1   # Switch to a specific version
+./go logs nginx     # View logs for specific service
+./go restart api    # Restart a service
 ./go exec api bash  # Shell into a container
 ```
 
@@ -94,6 +96,32 @@ Run manual health check:
 - `.env.secret` is auto-generated with 128-character passwords on first run
 - `.env` is auto-created from `.env.template` on first run
 - SQL Server uses isolated internal network
+
+## Version Management
+
+### Checking Current Version
+
+```bash
+./go version
+```
+
+Shows the configured version (TAG in `.env`) and the actual versions running in containers.
+
+### Switching Versions
+
+```bash
+./go switch 0.2.1    # Switch to specific version
+./go switch latest   # Switch to latest version
+```
+
+The switch command will:
+1. Validate the version format
+2. Verify the version exists in the registry
+3. Update the TAG in `.env`
+4. Pull the new images
+5. Restart services with the new version (if running)
+
+**Note:** Version format is `X.Y.Z` (e.g., 0.2.1, 1.0.0) without the `v` prefix.
 
 ## Image Management
 

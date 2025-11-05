@@ -51,9 +51,8 @@ if [ "$REDIACC_SKIP_CLI_INSTALL" = "true" ]; then
     echo "✓ Using existing rediacc CLI installation"
 elif ! command -v rediacc &> /dev/null; then
     # Derive CLI version from TAG environment variable (used for Docker images)
-    # Strip 'v' prefix if present (e.g., v0.1.67 -> 0.1.67 for pip compatibility)
+    # TAG format: 0.1.67, 0.2.1, or latest (no v prefix)
     CLI_VERSION="${TAG:-latest}"
-    CLI_VERSION="${CLI_VERSION#v}"
 
     if [ "$CLI_VERSION" = "latest" ]; then
         echo "Installing latest rediacc CLI from PyPI..."

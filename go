@@ -438,6 +438,113 @@ health() {
     fi
 }
 
+# Function to show current version
+version() {
+    echo "Elite Core Version Information"
+    echo "=============================="
+    echo ""
+
+    # Show TAG from .env
+    if [ -f ".env" ]; then
+        local env_tag=$(grep "^TAG=" .env | cut -d'=' -f2)
+        echo "Configured version (TAG): ${env_tag:-not set}"
+    else
+        echo "Configured version (TAG): .env not found"
+    fi
+
+    echo ""
+
+    # Show running container versions
+    echo "Running container versions:"
+    local containers_running=false
+
+    for service in nginx api; do
+        local container_name="${INSTANCE_NAME:-rediacc}-${service}"
+        if docker inspect "$container_name" >/dev/null 2>&1; then
+            containers_running=true
+            local image=$(docker inspect --format='{{.Config.Image}}' "$container_name" 2>/dev/null)
+            local tag=$(echo "$image" | cut -d':' -f2)
+            echo "  ${service}: ${tag}"
+        fi
+    done
+
+    if [ "$containers_running" = false ]; then
+        echo "  No containers running (use './go up' to start services)"
+    fi
+}
+
+# Function to switch to a different version
+switch() {
+    local new_version="$1"
+
+    # Check if version parameter is provided
+    if [ -z "$new_version" ]; then
+        echo "Error: Version parameter required"
+        echo "Usage: ./go switch <version>"
+        echo "Examples:"
+        echo "  ./go switch 0.2.1"
+        echo "  ./go switch latest"
+        exit 1
+    fi
+
+    # Validate version format (alphanumeric, dots, hyphens only - no v prefix)
+    if [[ ! "$new_version" =~ ^[a-zA-Z0-9._-]+$ ]]; then
+        echo "Error: Invalid version format: $new_version"
+        echo "Version must contain only alphanumeric characters, dots, hyphens, and underscores"
+        echo "Examples: 0.2.1, 1.0.0, latest"
+        exit 1
+    fi
+
+    # Verify version exists in registry for nginx image (as reference)
+    echo "Verifying version ${new_version} exists in registry..."
+    local test_image="${DOCKER_REGISTRY}/nginx:${new_version}"
+    if ! docker manifest inspect "$test_image" >/dev/null 2>&1; then
+        echo "Error: Version ${new_version} not found in registry"
+        echo "Image tested: ${test_image}"
+        exit 1
+    fi
+    echo "✓ Version ${new_version} verified in registry"
+
+    # Update TAG in .env file
+    if [ ! -f ".env" ]; then
+        echo "Error: .env file not found"
+        exit 1
+    fi
+
+    echo "Updating .env with new version..."
+    # Use a temporary file for atomic update
+    if grep -q "^TAG=" .env; then
+        sed "s/^TAG=.*/TAG=${new_version}/" .env > .env.tmp && mv .env.tmp .env
+    else
+        echo "TAG=${new_version}" >> .env
+    fi
+    echo "✓ Updated TAG to ${new_version} in .env"
+
+    # Export new TAG for this session
+    export TAG="$new_version"
+
+    # Check if services are running
+    if docker ps --format '{{.Names}}' | grep -q "${INSTANCE_NAME:-rediacc}-"; then
+        echo ""
+        echo "Pulling new images..."
+        # Force pull new images
+        docker pull "${DOCKER_REGISTRY}/nginx:${new_version}"
+        docker pull "${DOCKER_REGISTRY}/api:${new_version}"
+        docker pull "${DOCKER_REGISTRY}/bridge:${new_version}"
+
+        echo ""
+        echo "Restarting services with new version..."
+        down
+        up
+        echo ""
+        echo "✓ Successfully switched to version ${new_version}"
+    else
+        echo ""
+        echo "✓ Version updated to ${new_version}"
+        echo "Run './go up' to start services with the new version"
+    fi
+}
+
 # Function to show help
 help() {
     echo "Elite Core Docker Management Script"
@@ -450,6 +557,8 @@ help() {
     echo "  logs       - Show service logs"
     echo "  status     - Show service status"
     echo "  health     - Check service health"
+    echo "  version    - Show current version information"
+    echo "  switch     - Switch to a different version"
     echo "  build      - Build/rebuild services"
     echo "  exec       - Execute command in a container"
     echo "  restart    - Restart services"
@@ -458,6 +567,8 @@ help() {
     echo "Examples:"
     echo "  ./go up                  # Start all services"
     echo "  ./go down                # Stop all services"
+    echo "  ./go version             # Show version information"
+    echo "  ./go switch 0.2.1        # Switch to version 0.2.1"
     echo "  ./go logs nginx          # Show nginx logs"
     echo "  ./go health              # Check if services are healthy"
     echo "  ./go exec api bash       # Open bash in api container"
@@ -485,6 +596,14 @@ case "$1" in
     health)
         shift
         health "$@"
+        ;;
+    version)
+        shift
+        version "$@"
+        ;;
+    switch)
+        shift
+        switch "$@"
         ;;
     build)
         shift
