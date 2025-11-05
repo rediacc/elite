@@ -126,15 +126,16 @@ VERSION      STATUS
 0.2.2
 0.2.1        * (current)
 0.2.0
-
-latest
+0.1.67
 ```
+
+**Note:** The `latest` tag is only shown in CI mode.
 
 ### Switching Versions
 
 ```bash
 ./go switch 0.2.1    # Switch to specific version
-./go switch latest   # Switch to latest version
+./go switch 0.2.0    # Switch to another version
 ```
 
 The switch command will:
@@ -144,7 +145,9 @@ The switch command will:
 4. Pull the new images
 5. Restart services with the new version (if running)
 
-**Note:** Version format is `X.Y.Z` (e.g., 0.2.1, 1.0.0) without the `v` prefix.
+**Note:**
+- Version format is `X.Y.Z` (e.g., 0.2.1, 1.0.0) without the `v` prefix
+- The `latest` tag is only available in CI mode for automated testing, not for standalone or cloud deployments
 
 ## Image Management
 

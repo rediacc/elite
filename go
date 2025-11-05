@@ -67,6 +67,15 @@ _generate_complex_password() {
     echo "$password" | fold -w1 | shuf | tr -d '\n'
 }
 
+# Function to detect if running in CI mode
+_is_ci_mode() {
+    # Return 0 (true) if running in CI, 1 (false) otherwise
+    if [ -n "$GITHUB_ACTIONS" ] || [ -n "$CI" ]; then
+        return 0
+    fi
+    return 1
+}
+
 # Check if .env file exists, create from template if missing
 if [ ! -f ".env" ]; then
     if [ -f ".env.template" ]; then
@@ -538,13 +547,15 @@ versions() {
         printf "%-12s %s\n" "$ver" "$status"
     done
 
-    # Show latest tag separately
-    echo ""
-    local latest_status=""
-    if [ "$current_tag" = "latest" ]; then
-        latest_status="* (current)"
+    # Show latest tag separately (only in CI mode)
+    if _is_ci_mode; then
+        echo ""
+        local latest_status=""
+        if [ "$current_tag" = "latest" ]; then
+            latest_status="* (current)"
+        fi
+        printf "%-12s %s\n" "latest" "$latest_status"
     fi
-    printf "%-12s %s\n" "latest" "$latest_status"
 }
 
 # Function to switch to a different version
@@ -557,7 +568,17 @@ switch() {
         echo "Usage: ./go switch <version>"
         echo "Examples:"
         echo "  ./go switch 0.2.1"
-        echo "  ./go switch latest"
+        echo "  ./go switch 0.2.0"
+        exit 1
+    fi
+
+    # Reject "latest" tag unless in CI mode
+    if [ "$new_version" = "latest" ] && ! _is_ci_mode; then
+        echo "Error: The 'latest' tag is only available in CI mode for testing purposes"
+        echo ""
+        echo "For standalone and cloud deployments, please use a specific version:"
+        echo "  ./go versions           # List available versions"
+        echo "  ./go switch 0.2.2       # Switch to a specific version"
         exit 1
     fi
 
@@ -565,7 +586,7 @@ switch() {
     if [[ ! "$new_version" =~ ^[a-zA-Z0-9._-]+$ ]]; then
         echo "Error: Invalid version format: $new_version"
         echo "Version must contain only alphanumeric characters, dots, hyphens, and underscores"
-        echo "Examples: 0.2.1, 1.0.0, latest"
+        echo "Examples: 0.2.1, 1.0.0"
         exit 1
     fi
 
