@@ -646,7 +646,6 @@ switch() {
 
         echo ""
         echo "Restarting services with new version..."
-        down
         up
         echo ""
         echo "✓ Successfully switched to version ${new_version}"
