@@ -279,6 +279,48 @@ up() {
     # Cleanup bridge containers before starting services
     cleanup_bridge_containers
 
+    # Auto-generate SSL/TLS certificates if HTTPS is enabled and certs don't exist
+    # Only in standalone mode (when INSTANCE_NAME is not set)
+    if [ -z "$INSTANCE_NAME" ] && [ "${ENABLE_HTTPS:-true}" = "true" ]; then
+        if [ ! -f "./certs/cert.pem" ] || [ ! -f "./certs/key.pem" ]; then
+            echo ""
+            echo "HTTPS is enabled but certificates not found."
+            echo "Auto-generating self-signed SSL/TLS certificates..."
+            echo ""
+
+            # Source environment to get SYSTEM_DOMAIN and SSL_EXTRA_DOMAINS
+            set -a
+            if [ -f ".env" ]; then
+                source .env
+            fi
+            set +a
+
+            # Export variables for cert generation
+            export SYSTEM_DOMAIN="${SYSTEM_DOMAIN:-localhost}"
+            export SSL_EXTRA_DOMAINS="${SSL_EXTRA_DOMAINS:-}"
+
+            # Check if generation script exists
+            if [ -f "./scripts/generate-certs.sh" ]; then
+                bash ./scripts/generate-certs.sh
+                if [ $? -eq 0 ]; then
+                    echo ""
+                    echo -e "\e[32m✓ Certificates generated successfully!\e[0m"
+                    echo ""
+                else
+                    echo -e "\e[31mError: Certificate generation failed!\e[0m"
+                    echo "Services will start in HTTP-only mode."
+                    echo "To manually generate certificates, run: ./go cert"
+                    echo ""
+                fi
+            else
+                echo -e "\e[33mWarning: Certificate generation script not found!\e[0m"
+                echo "Expected: ./scripts/generate-certs.sh"
+                echo "Services will start in HTTP-only mode."
+                echo ""
+            fi
+        fi
+    fi
+
     # Ensure SQL Server data directory exists with correct permissions
     # Needed in standalone mode and CI (not cloud instances) when using dedicated SQL
     if [ -z "$INSTANCE_NAME" ] && [ "${SQL_MODE}" != "shared" ]; then
@@ -610,6 +652,103 @@ switch() {
     fi
 }
 
+# Function to generate SSL/TLS certificates
+cert() {
+    echo "Generating self-signed SSL/TLS certificates..."
+    echo ""
+
+    # Check if generation script exists
+    if [ ! -f "./scripts/generate-certs.sh" ]; then
+        echo -e "\e[31mError: Certificate generation script not found!\e[0m"
+        echo "Expected: ./scripts/generate-certs.sh"
+        exit 1
+    fi
+
+    # Source environment files to get SYSTEM_DOMAIN and SSL_EXTRA_DOMAINS
+    set -a
+    if [ -f ".env" ]; then
+        source .env
+    fi
+    set +a
+
+    # Export variables for the certificate generation script
+    export SYSTEM_DOMAIN="${SYSTEM_DOMAIN:-localhost}"
+    export SSL_EXTRA_DOMAINS="${SSL_EXTRA_DOMAINS:-}"
+
+    # Run the generation script
+    bash ./scripts/generate-certs.sh
+
+    if [ $? -eq 0 ]; then
+        echo ""
+        echo -e "\e[32m✓ Certificates generated successfully!\e[0m"
+        echo ""
+        echo "To use HTTPS, ensure ENABLE_HTTPS=true in your .env file (default)"
+        echo "Then restart the services:"
+        echo "  ./go down"
+        echo "  ./go up"
+    else
+        echo -e "\e[31mError: Certificate generation failed!\e[0m"
+        exit 1
+    fi
+}
+
+# Function to show certificate information
+cert_info() {
+    local CERT_FILE="./certs/cert.pem"
+
+    if [ ! -f "$CERT_FILE" ]; then
+        echo -e "\e[33mNo certificate found at $CERT_FILE\e[0m"
+        echo ""
+        echo "Generate certificates with: ./go cert"
+        exit 1
+    fi
+
+    echo "Certificate Information"
+    echo "======================"
+    echo ""
+
+    # Display certificate details
+    echo "Subject:"
+    openssl x509 -in "$CERT_FILE" -noout -subject 2>/dev/null || echo "(Unable to read subject)"
+    echo ""
+
+    echo "Issuer:"
+    openssl x509 -in "$CERT_FILE" -noout -issuer 2>/dev/null || echo "(Unable to read issuer)"
+    echo ""
+
+    echo "Validity:"
+    openssl x509 -in "$CERT_FILE" -noout -dates 2>/dev/null || echo "(Unable to read dates)"
+    echo ""
+
+    echo "Subject Alternative Names:"
+    openssl x509 -in "$CERT_FILE" -noout -ext subjectAltName 2>/dev/null || echo "(No SANs found)"
+    echo ""
+
+    # Check expiration
+    local expiry_date=$(openssl x509 -in "$CERT_FILE" -noout -enddate 2>/dev/null | cut -d= -f2)
+    if [ -n "$expiry_date" ]; then
+        local expiry_epoch=$(date -d "$expiry_date" +%s 2>/dev/null || date -j -f "%b %d %T %Y %Z" "$expiry_date" +%s 2>/dev/null)
+        local current_epoch=$(date +%s)
+        local days_until_expiry=$(( ($expiry_epoch - $current_epoch) / 86400 ))
+
+        if [ $days_until_expiry -lt 0 ]; then
+            echo -e "\e[31m⚠ Certificate has EXPIRED!\e[0m"
+            echo "Run './go cert' to generate a new certificate"
+        elif [ $days_until_expiry -lt 30 ]; then
+            echo -e "\e[33m⚠ Certificate expires in $days_until_expiry days\e[0m"
+            echo "Consider regenerating with './go cert'"
+        else
+            echo -e "\e[32m✓ Certificate is valid (expires in $days_until_expiry days)\e[0m"
+        fi
+    fi
+
+    echo ""
+    echo "Certificate files:"
+    echo "  - Certificate: ./certs/cert.pem"
+    echo "  - Private Key: ./certs/key.pem"
+    echo "  - CA Bundle:   ./certs/ca.pem"
+}
+
 # Function to show help
 help() {
     echo "Elite Core Docker Management Script"
@@ -628,6 +767,8 @@ help() {
     echo "  build      - Build/rebuild services"
     echo "  exec       - Execute command in a container"
     echo "  restart    - Restart services"
+    echo "  cert       - Generate self-signed SSL/TLS certificates"
+    echo "  cert-info  - Show certificate information"
     echo "  help       - Show this help message"
     echo ""
     echo "Examples:"
@@ -640,6 +781,8 @@ help() {
     echo "  ./go health              # Check if services are healthy"
     echo "  ./go exec api bash       # Open bash in api container"
     echo "  ./go restart api         # Restart api service"
+    echo "  ./go cert                # Generate SSL certificates for HTTPS"
+    echo "  ./go cert-info           # View certificate details and expiry"
 }
 
 # Main script logic
@@ -687,6 +830,14 @@ case "$1" in
     restart)
         shift
         restart "$@"
+        ;;
+    cert)
+        shift
+        cert "$@"
+        ;;
+    cert-info)
+        shift
+        cert_info "$@"
         ;;
     help|--help|-h)
         help

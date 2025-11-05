@@ -6,7 +6,7 @@ Standalone deployment system for Rediacc's core services.
 
 ## Services
 
-- **nginx** - Reverse proxy (port 80)
+- **nginx** - Reverse proxy (port 80/HTTP, 443/HTTPS)
 - **api** - .NET Middleware API server
 - **sql** - SQL Server 2022 Express database
 
@@ -17,9 +17,71 @@ cd cloud/elite
 ./go up
 ```
 
+On first startup, self-signed SSL certificates will be auto-generated for HTTPS.
+
 Services will be available at:
-- Web UI: http://localhost
+- Web UI (HTTPS): https://localhost (recommended)
+- Web UI (HTTP): http://localhost
 - SQL Server: localhost:1433 (if `SQL_PORT` is uncommented in `.env`)
+
+> **Note:** HTTPS uses self-signed certificates which will show browser security warnings. This is normal for local development. See [HTTPS Configuration](#https-configuration) below.
+
+## HTTPS Configuration
+
+Elite uses HTTPS by default with auto-generated self-signed certificates. This provides a secure development environment and enables modern web features that require HTTPS (like the Web Crypto API).
+
+### Auto-Generation
+
+Certificates are automatically generated on first `./go up` if:
+- `ENABLE_HTTPS=true` in `.env` (default)
+- No certificates exist in `./certs/`
+
+The certificates include Subject Alternative Names (SANs) for:
+- localhost
+- 127.0.0.1
+- Your `SYSTEM_DOMAIN`
+- Any domains in `SSL_EXTRA_DOMAINS`
+- Auto-detected host IP address
+
+### Manual Certificate Management
+
+```bash
+./go cert         # Generate new certificates
+./go cert-info    # View certificate details and expiry
+```
+
+### Browser Security Warnings
+
+Self-signed certificates will show security warnings in browsers. To accept the certificate:
+
+- **Chrome/Edge**: Click "Advanced" → "Proceed to localhost (unsafe)"
+- **Firefox**: Click "Advanced" → "Accept the Risk and Continue"
+- **Safari**: Click "Show Details" → "visit this website"
+
+This is expected and safe for local development.
+
+### Disabling HTTPS
+
+To disable HTTPS (e.g., when using a reverse proxy):
+
+```bash
+# In .env file:
+ENABLE_HTTPS=false
+```
+
+Then restart services:
+```bash
+./go down
+./go up
+```
+
+### Using with Reverse Proxy
+
+If you're running Elite behind a reverse proxy (like Nginx or Traefik) that handles SSL termination:
+
+1. Set `ENABLE_HTTPS=false` in `.env`
+2. Configure your reverse proxy to handle HTTPS
+3. Proxy to Elite's HTTP port (default: 80)
 
 ## Management Commands
 
@@ -34,6 +96,8 @@ Services will be available at:
 ./go logs nginx     # View logs for specific service
 ./go restart api    # Restart a service
 ./go exec api bash  # Shell into a container
+./go cert           # Generate SSL/TLS certificates
+./go cert-info      # Show certificate information and expiry
 ```
 
 ## Configuration
@@ -42,9 +106,12 @@ Services will be available at:
 
 All configuration is optional with sensible defaults in `.env.template`:
 
-- `DOCKER_REGISTRY` - Docker registry URL (default: registry.rediacc.com)
-- `TAG` - Image tag to use (default: latest)
-- `HTTP_PORT` - Port for nginx (default: 80)
+- `DOCKER_REGISTRY` - Docker registry URL (default: ghcr.io/rediacc/elite)
+- `TAG` - Image tag to use (default: 0.2.2)
+- `HTTP_PORT` - Port for HTTP (default: 80)
+- `HTTPS_PORT` - Port for HTTPS (default: 443)
+- `ENABLE_HTTPS` - Enable HTTPS with self-signed certs (default: true)
+- `SSL_EXTRA_DOMAINS` - Additional domains for certificate SANs (default: empty)
 - `SQL_PORT` - Port for SQL Server (default: not exposed)
 - `SYSTEM_DOMAIN` - System domain (default: rediacc.com)
 - `SYSTEM_ADMIN_EMAIL` - Admin email (default: admin@rediacc.io)
@@ -97,6 +164,9 @@ Run manual health check:
 - `.env.secret` is auto-generated with 128-character passwords on first run
 - `.env` is auto-created from `.env.template` on first run
 - SQL Server uses isolated internal network
+- HTTPS enabled by default with self-signed certificates
+- Self-signed certificates in `./certs/` are gitignored and auto-generated
+- **Important**: Self-signed certificates are for development only, not production
 
 ## Version Management
 

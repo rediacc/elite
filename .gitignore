@@ -5,6 +5,9 @@
 # Database volume
 mssql/
 
+# SSL/TLS Certificates (auto-generated)
+certs/
+
 # Logs
 logs/
 *.log
