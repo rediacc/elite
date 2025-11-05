@@ -29,6 +29,7 @@ Services will be available at:
 ./go status         # Show service status
 ./go health         # Check if services are healthy
 ./go version        # Show current version information
+./go versions       # List available versions from registry
 ./go switch 0.2.1   # Switch to a specific version
 ./go logs nginx     # View logs for specific service
 ./go restart api    # Restart a service
@@ -106,6 +107,28 @@ Run manual health check:
 ```
 
 Shows the configured version (TAG in `.env`) and the actual versions running in containers.
+
+### Listing Available Versions
+
+```bash
+./go versions
+```
+
+Lists all available versions from the registry. The current configured version is marked with `*`.
+
+Example output:
+```
+REDIACC ELITE VERSIONS
+======================
+
+VERSION      STATUS
+------------------------
+0.2.2
+0.2.1        * (current)
+0.2.0
+
+latest
+```
 
 ### Switching Versions
 

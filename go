@@ -473,6 +473,80 @@ version() {
     fi
 }
 
+# Function to list available versions from registry
+versions() {
+    local limit="${1:-20}"  # Default to 20 versions
+
+    echo "REDIACC ELITE VERSIONS"
+    echo "======================"
+    echo ""
+
+    # Get current configured version
+    local current_tag=""
+    if [ -f ".env" ]; then
+        current_tag=$(grep "^TAG=" .env | cut -d'=' -f2)
+    fi
+
+    # Check if Docker config exists
+    if [ ! -f ~/.docker/config.json ]; then
+        echo "Error: Docker config not found at ~/.docker/config.json"
+        echo "Please authenticate: docker login ghcr.io"
+        exit 1
+    fi
+
+    # Extract auth from Docker config
+    local auth=$(jq -r ".auths[\"ghcr.io\"].auth" ~/.docker/config.json 2>/dev/null)
+    if [ -z "$auth" ] || [ "$auth" = "null" ]; then
+        echo "Error: No authentication found for ghcr.io"
+        echo "Please authenticate: docker login ghcr.io"
+        exit 1
+    fi
+
+    # Decode credentials
+    local creds=$(echo "$auth" | base64 -d)
+    local username=$(echo "$creds" | cut -d: -f1)
+    local password=$(echo "$creds" | cut -d: -f2-)
+
+    # Get bearer token
+    local token=$(curl -s -u "${username}:${password}" \
+        "https://ghcr.io/token?scope=repository:rediacc/elite/nginx:pull" | jq -r .token)
+
+    if [ -z "$token" ] || [ "$token" = "null" ]; then
+        echo "Error: Failed to get authentication token from registry"
+        exit 1
+    fi
+
+    # Get tags list
+    local tags=$(curl -s -H "Authorization: Bearer ${token}" \
+        "https://ghcr.io/v2/rediacc/elite/nginx/tags/list" | jq -r '.tags[]')
+
+    # Filter and sort versions (no v prefix, no latest)
+    local versions=$(echo "$tags" | grep -v "^v" | grep -v "^latest$" | sort -V -r | head -n "$limit")
+
+    # Display header
+    printf "%-12s %s\n" "VERSION" "STATUS"
+    printf "%s\n" "------------------------"
+
+    # Display versions
+    for ver in $versions; do
+        # Check if this is the current version
+        local status=""
+        if [ "$ver" = "$current_tag" ]; then
+            status="* (current)"
+        fi
+
+        printf "%-12s %s\n" "$ver" "$status"
+    done
+
+    # Show latest tag separately
+    echo ""
+    local latest_status=""
+    if [ "$current_tag" = "latest" ]; then
+        latest_status="* (current)"
+    fi
+    printf "%-12s %s\n" "latest" "$latest_status"
+}
+
 # Function to switch to a different version
 switch() {
     local new_version="$1"
@@ -558,6 +632,7 @@ help() {
     echo "  status     - Show service status"
     echo "  health     - Check service health"
     echo "  version    - Show current version information"
+    echo "  versions   - List available versions from registry"
     echo "  switch     - Switch to a different version"
     echo "  build      - Build/rebuild services"
     echo "  exec       - Execute command in a container"
@@ -568,6 +643,7 @@ help() {
     echo "  ./go up                  # Start all services"
     echo "  ./go down                # Stop all services"
     echo "  ./go version             # Show version information"
+    echo "  ./go versions            # List available versions"
     echo "  ./go switch 0.2.1        # Switch to version 0.2.1"
     echo "  ./go logs nginx          # Show nginx logs"
     echo "  ./go health              # Check if services are healthy"
@@ -600,6 +676,10 @@ case "$1" in
     version)
         shift
         version "$@"
+        ;;
+    versions)
+        shift
+        versions "$@"
         ;;
     switch)
         shift
