@@ -16,7 +16,7 @@ CERT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/certs"
 CERT_FILE="${CERT_DIR}/cert.pem"
 KEY_FILE="${CERT_DIR}/key.pem"
 CA_FILE="${CERT_DIR}/ca.pem"
-VALIDITY_DAYS=365
+VALIDITY_DAYS=1825
 
 # Colors for output
 RED='\033[0;31m'
