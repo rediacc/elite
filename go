@@ -72,6 +72,18 @@ _generate_complex_password() {
     echo "$password" | fold -w1 | shuf | tr -d '\n'
 }
 
+# Check if .env file exists, create from template if missing
+if [ ! -f ".env" ]; then
+    if [ -f ".env.template" ]; then
+        echo -e "\e[33m.env file not found. Creating from .env.template...\e[0m"
+        cp .env.template .env
+        echo -e "\e[32m.env file created. You can customize it with your settings.\e[0m"
+    else
+        echo -e "\e[31mError: Neither .env nor .env.template found!\e[0m"
+        exit 1
+    fi
+fi
+
 # Check if .env.secret file exists
 if [ ! -f ".env.secret" ]; then
     echo -e "\e[33m.env.secret file not found. Creating one with random passwords...\e[0m"

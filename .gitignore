@@ -1,4 +1,5 @@
-# Environment secrets
+# Environment files
+.env
 .env.secret
 
 # Database volume

@@ -37,7 +37,7 @@ Services will be available at:
 
 ### Environment Variables
 
-All configuration is optional with sensible defaults in `.env`:
+All configuration is optional with sensible defaults in `.env.template`:
 
 - `DOCKER_REGISTRY` - Docker registry URL (default: registry.rediacc.com)
 - `TAG` - Image tag to use (default: latest)
@@ -49,7 +49,8 @@ All configuration is optional with sensible defaults in `.env`:
 
 ### Configuration Files
 
-- `.env` - System defaults (committed to git)
+- `.env.template` - System defaults (committed to git)
+- `.env` - Local configuration (auto-created from template, gitignored)
 - `.env.secret` - Auto-generated passwords (gitignored, created on first run)
 
 ## Architecture
@@ -89,8 +90,9 @@ Run manual health check:
 
 ## Security
 
+- `.env` and `.env.secret` are both gitignored to prevent credential leaks
 - `.env.secret` is auto-generated with 128-character passwords on first run
-- Never commit `.env.secret` to git
+- `.env` is auto-created from `.env.template` on first run
 - SQL Server uses isolated internal network
 
 ## Image Management

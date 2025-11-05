@@ -6,6 +6,18 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ELITE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+# Check if .env file exists, create from template if missing
+if [ ! -f "$ELITE_DIR/.env" ]; then
+    if [ -f "$ELITE_DIR/.env.template" ]; then
+        echo ".env file not found. Creating from .env.template..."
+        cp "$ELITE_DIR/.env.template" "$ELITE_DIR/.env"
+        echo ".env file created."
+    else
+        echo "Error: Neither .env nor .env.template found!"
+        exit 1
+    fi
+fi
+
 # Source .env file for base configuration
 if [ -f "$ELITE_DIR/.env" ]; then
     set -a  # automatically export all variables
