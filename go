@@ -76,12 +76,73 @@ _is_ci_mode() {
     return 1
 }
 
+# Helper function to get the latest version from registry (without display)
+_get_latest_version() {
+    # Check if Docker config exists
+    if [ ! -f ~/.docker/config.json ]; then
+        return 1
+    fi
+
+    # Extract auth from Docker config
+    local auth=$(jq -r ".auths[\"ghcr.io\"].auth" ~/.docker/config.json 2>/dev/null)
+    if [ -z "$auth" ] || [ "$auth" = "null" ]; then
+        return 1
+    fi
+
+    # Decode credentials
+    local creds=$(echo "$auth" | base64 -d)
+    local username=$(echo "$creds" | cut -d: -f1)
+    local password=$(echo "$creds" | cut -d: -f2-)
+
+    # Get bearer token
+    local token=$(curl -s -u "${username}:${password}" \
+        "https://ghcr.io/token?scope=repository:rediacc/elite/nginx:pull" | jq -r .token 2>/dev/null)
+
+    if [ -z "$token" ] || [ "$token" = "null" ]; then
+        return 1
+    fi
+
+    # Get tags list
+    local tags=$(curl -s -H "Authorization: Bearer ${token}" \
+        "https://ghcr.io/v2/rediacc/elite/nginx/tags/list" 2>/dev/null | jq -r '.tags[]' 2>/dev/null)
+
+    # Filter and sort versions (no v prefix, no latest), return first (newest)
+    local latest=$(echo "$tags" | grep -v "^v" | grep -v "^latest$" | sort -V -r | head -n 1)
+
+    if [ -n "$latest" ]; then
+        echo "$latest"
+        return 0
+    fi
+
+    return 1
+}
+
 # Check if .env file exists, create from template if missing
 if [ ! -f ".env" ]; then
     if [ -f ".env.template" ]; then
         echo -e "\e[33m.env file not found. Creating from .env.template...\e[0m"
         cp .env.template .env
         echo -e "\e[32m.env file created. You can customize it with your settings.\e[0m"
+
+        # Auto-initialize TAG in standalone mode if it's set to 'latest'
+        if ! _is_ci_mode; then
+            current_tag=$(grep "^TAG=" .env 2>/dev/null | cut -d'=' -f2)
+            if [ "$current_tag" = "latest" ]; then
+                echo "Detected TAG=latest in standalone mode. Querying registry for latest version..."
+                latest_version=$(_get_latest_version)
+                if [ -n "$latest_version" ]; then
+                    # Replace TAG=latest with actual version in .env
+                    sed -i "s/^TAG=latest$/TAG=${latest_version}/" .env
+                    echo "Initialized TAG=${latest_version}"
+                else
+                    echo "Warning: Could not query registry (check Docker login)."
+                    echo "TAG is set to 'latest' which requires CI mode. Please run:"
+                    echo "  docker login ghcr.io"
+                    echo "  ./go versions"
+                    echo "  ./go switch <version>"
+                fi
+            fi
+        fi
     else
         echo -e "\e[31mError: Neither .env nor .env.template found!\e[0m"
         exit 1
