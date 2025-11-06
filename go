@@ -497,6 +497,124 @@ down() {
     cleanup_bridge_containers
 }
 
+# Function to reset the entire environment
+reset() {
+    local force_mode=false
+
+    # Parse flags
+    if [ "$1" = "--force" ] || [ "$1" = "-f" ]; then
+        force_mode=true
+    fi
+
+    # Pre-flight check: save current TAG version
+    saved_tag=""
+    if [ -f ".env" ]; then
+        saved_tag=$(grep "^TAG=" .env 2>/dev/null | cut -d'=' -f2)
+    fi
+
+    # Display warning
+    echo "========================================================"
+    echo "                   WARNING"
+    echo "========================================================"
+    echo ""
+    echo "This will PERMANENTLY DELETE:"
+    echo "  - All database data (mssql/ directory)"
+    echo "  - Environment configurations (.env, .env.secret)"
+    echo "  - SSL certificates (certs/ directory)"
+    echo "  - Log files (logs/ directory if exists)"
+    echo "  - All running containers"
+    echo "  - Docker networks"
+    echo ""
+    echo "This action CANNOT be undone!"
+    echo ""
+    echo "========================================================"
+    echo ""
+
+    # Get confirmation unless --force
+    if [ "$force_mode" = false ]; then
+        read -p "Type 'reset' to confirm: " confirmation
+        if [ "$confirmation" != "reset" ]; then
+            echo "Reset cancelled."
+            exit 0
+        fi
+    else
+        echo "Force mode: Skipping confirmation"
+    fi
+
+    echo ""
+    echo "Starting reset process..."
+    echo ""
+
+    # Step 1: Stop all services
+    echo "[1/5] Stopping all services..."
+    down
+    echo ""
+
+    # Step 2: Remove .env file
+    echo "[2/5] Removing configuration files..."
+    if [ -f ".env" ]; then
+        rm -f .env
+        echo "  - Removed .env"
+    fi
+
+    if [ -f ".env.secret" ]; then
+        rm -f .env.secret
+        echo "  - Removed .env.secret"
+    fi
+    echo ""
+
+    # Step 3: Remove mssql directory
+    echo "[3/5] Removing database data..."
+    if [ -d "mssql" ]; then
+        if sudo -n true 2>/dev/null; then
+            sudo rm -rf mssql
+            echo "  - Removed mssql/ (with sudo)"
+        else
+            rm -rf mssql 2>/dev/null || {
+                echo "  - Warning: Could not remove mssql/ (permission denied)"
+                echo "  - Please run: sudo rm -rf mssql"
+            }
+        fi
+    fi
+    echo ""
+
+    # Step 4: Remove certs and logs
+    echo "[4/5] Removing certificates and logs..."
+    if [ -d "certs" ]; then
+        rm -rf certs
+        echo "  - Removed certs/"
+    fi
+
+    if [ -d "logs" ]; then
+        rm -rf logs
+        echo "  - Removed logs/"
+    fi
+    echo ""
+
+    # Step 5: Clean docker networks
+    echo "[5/5] Cleaning docker networks..."
+    docker network rm rediacc_internet rediacc_intranet 2>/dev/null || true
+    echo "  - Cleaned docker networks"
+    echo ""
+
+    echo "========================================================"
+    echo "Reset complete!"
+    echo "========================================================"
+    echo ""
+
+    if [ -n "$saved_tag" ] && [ "$saved_tag" != "latest" ]; then
+        echo "Previous TAG version was: $saved_tag"
+        echo ""
+    fi
+
+    echo "Next steps:"
+    echo "  1. Run: ./go up"
+    if [ -n "$saved_tag" ] && [ "$saved_tag" != "latest" ]; then
+        echo "  2. Restore version: ./go switch $saved_tag"
+    fi
+    echo ""
+}
+
 # Function to show logs
 logs() {
     # Use project name from INSTANCE_NAME if set
@@ -845,6 +963,7 @@ help() {
     echo "Commands:"
     echo "  up         - Start all services"
     echo "  down       - Stop all services"
+    echo "  reset      - Reset entire environment (WARNING: destructive)"
     echo "  logs       - Show service logs"
     echo "  status     - Show service status"
     echo "  health     - Check service health"
@@ -861,6 +980,8 @@ help() {
     echo "Examples:"
     echo "  ./go up                  # Start all services"
     echo "  ./go down                # Stop all services"
+    echo "  ./go reset               # Reset environment (requires confirmation)"
+    echo "  ./go reset --force       # Reset without confirmation"
     echo "  ./go version             # Show version information"
     echo "  ./go versions            # List available versions"
     echo "  ./go switch 0.2.1        # Switch to version 0.2.1"
@@ -881,6 +1002,10 @@ case "$1" in
     down)
         shift
         down "$@"
+        ;;
+    reset)
+        shift
+        reset "$@"
         ;;
     logs)
         shift
