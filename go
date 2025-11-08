@@ -273,7 +273,7 @@ _ensure_registry_login() {
 # Function to check if required images exist locally
 _check_and_pull_images() {
     local images=(
-        "${DOCKER_REGISTRY}/nginx:${TAG}"
+        "${DOCKER_REGISTRY}/web:${TAG}"
         "${DOCKER_REGISTRY}/api:${TAG}"
         "${DOCKER_BRIDGE_IMAGE}"
     )
@@ -448,7 +448,7 @@ up() {
     if [ "${SQL_MODE}" = "shared" ]; then
         echo "Skipping dedicated SQL service (using shared SQL Server)"
         # Use --no-deps to prevent docker-compose from starting the sql dependency
-        _docker_compose up -d --no-deps nginx api "$@"
+        _docker_compose up -d --no-deps web api "$@"
     else
         _docker_compose up -d "$@"
     fi
