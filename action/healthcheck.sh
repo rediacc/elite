@@ -27,14 +27,14 @@ check_container() {
     fi
 }
 
-# Function to check nginx
-check_nginx() {
-    # Check if nginx is proxying requests (use API endpoint since root may not be configured)
+# Function to check web server
+check_web() {
+    # Check if web server is proxying requests (use API endpoint since root may not be configured)
     if curl -s http://localhost/api/health > /dev/null 2>&1; then
-        echo -e "${GREEN}✓${NC} nginx is responding"
+        echo -e "${GREEN}✓${NC} web is responding"
         return 0
     else
-        echo -e "${RED}✗${NC} nginx is not responding"
+        echo -e "${RED}✗${NC} web is not responding"
         return 1
     fi
 }
@@ -82,14 +82,14 @@ echo ""
 FAILED=0
 
 # Check all services
-check_container "nginx" || FAILED=1
+check_container "web" || FAILED=1
 check_container "api" || FAILED=1
 check_container "sql" || FAILED=1
 
 echo ""
 
 # Check service endpoints
-check_nginx || FAILED=1
+check_web || FAILED=1
 check_api || FAILED=1
 check_sql || FAILED=1
 
