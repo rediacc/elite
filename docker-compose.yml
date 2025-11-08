@@ -1,16 +1,16 @@
 services:
-  nginx:
-    image: ${DOCKER_REGISTRY}/nginx:${TAG}
+  web:
+    image: ${DOCKER_REGISTRY}/web:${TAG}
     pull_policy: never
-    container_name: ${INSTANCE_NAME:-rediacc}-nginx
-    hostname: ${INSTANCE_NAME:-rediacc}-nginx
+    container_name: ${INSTANCE_NAME:-rediacc}-web
+    hostname: ${INSTANCE_NAME:-rediacc}-web
     environment:
       - SYSTEM_DOMAIN=${SYSTEM_DOMAIN:-localhost}
     networks:
       internet:
       intranet:
         aliases:
-          - rediacc-nginx
+          - rediacc-web
     depends_on:
       - api
     restart: unless-stopped

@@ -1,5 +1,5 @@
 name: 'Rediacc Elite Services'
-description: 'Start Rediacc core services (nginx, API, SQL Server) for CI/CD testing'
+description: 'Start Rediacc core services (web server, API, SQL Server) for CI/CD testing'
 author: 'Rediacc'
 
 branding:

@@ -96,7 +96,7 @@ _get_latest_version() {
 
     # Get bearer token
     local token=$(curl -s -u "${username}:${password}" \
-        "https://ghcr.io/token?scope=repository:rediacc/elite/nginx:pull" | jq -r .token 2>/dev/null)
+        "https://ghcr.io/token?scope=repository:rediacc/elite/web:pull" | jq -r .token 2>/dev/null)
 
     if [ -z "$token" ] || [ "$token" = "null" ]; then
         return 1
@@ -104,7 +104,7 @@ _get_latest_version() {
 
     # Get tags list
     local tags=$(curl -s -H "Authorization: Bearer ${token}" \
-        "https://ghcr.io/v2/rediacc/elite/nginx/tags/list" 2>/dev/null | jq -r '.tags[]' 2>/dev/null)
+        "https://ghcr.io/v2/rediacc/elite/web/tags/list" 2>/dev/null | jq -r '.tags[]' 2>/dev/null)
 
     # Filter and sort versions (no v prefix, no latest), return first (newest)
     local latest=$(echo "$tags" | grep -v "^v" | grep -v "^latest$" | sort -V -r | head -n 1)
@@ -680,7 +680,7 @@ version() {
     echo "Running container versions:"
     local containers_running=false
 
-    for service in nginx api; do
+    for service in web api; do
         local container_name="${INSTANCE_NAME:-rediacc}-${service}"
         if docker inspect "$container_name" >/dev/null 2>&1; then
             containers_running=true
@@ -731,7 +731,7 @@ versions() {
 
     # Get bearer token
     local token=$(curl -s -u "${username}:${password}" \
-        "https://ghcr.io/token?scope=repository:rediacc/elite/nginx:pull" | jq -r .token)
+        "https://ghcr.io/token?scope=repository:rediacc/elite/web:pull" | jq -r .token)
 
     if [ -z "$token" ] || [ "$token" = "null" ]; then
         echo "Error: Failed to get authentication token from registry"
@@ -740,7 +740,7 @@ versions() {
 
     # Get tags list
     local tags=$(curl -s -H "Authorization: Bearer ${token}" \
-        "https://ghcr.io/v2/rediacc/elite/nginx/tags/list" | jq -r '.tags[]')
+        "https://ghcr.io/v2/rediacc/elite/web/tags/list" | jq -r '.tags[]')
 
     # Filter and sort versions (no v prefix, no latest)
     local versions=$(echo "$tags" | grep -v "^v" | grep -v "^latest$" | sort -V -r | head -n "$limit")

@@ -1,6 +1,6 @@
 # Rediacc Elite GitHub Action
 
-Add Rediacc services (nginx, API, SQL Server) to your CI/CD workflows for integration testing.
+Add Rediacc services (web server, API, SQL Server) to your CI/CD workflows for integration testing.
 
 ## Quick Start
 
@@ -94,7 +94,7 @@ act -j test -s DOCKER_REGISTRY_USERNAME -s DOCKER_REGISTRY_PASSWORD
 ### Images not found
 
 Ensure your Docker registry credentials are correct and the images exist at:
-- `${DOCKER_REGISTRY}/rediacc/nginx:${TAG}`
+- `${DOCKER_REGISTRY}/rediacc/web:${TAG}`
 - `${DOCKER_REGISTRY}/rediacc/api:${TAG}`
 
 Note: SQL Server uses standard Microsoft images from mcr.microsoft.com, not the custom registry.

@@ -6,7 +6,7 @@ Standalone deployment system for Rediacc's core services.
 
 ## Services
 
-- **nginx** - Reverse proxy (port 80/HTTP, 443/HTTPS)
+- **web** - Reverse proxy (port 80/HTTP, 443/HTTPS)
 - **api** - .NET Middleware API server
 - **sql** - SQL Server 2022 Express database
 
@@ -93,7 +93,7 @@ If you're running Elite behind a reverse proxy (like Nginx or Traefik) that hand
 ./go version        # Show current version information
 ./go versions       # List available versions from registry
 ./go switch 0.2.1   # Switch to a specific version
-./go logs nginx     # View logs for specific service
+./go logs web       # View logs for specific service
 ./go restart api    # Restart a service
 ./go exec api bash  # Shell into a container
 ./go cert           # Generate SSL/TLS certificates
@@ -139,7 +139,7 @@ All configuration is optional with sensible defaults in `.env.template`:
 
 ### Networks
 
-- `{instance}_rediacc_internet` - External network for nginx
+- `{instance}_rediacc_internet` - External network for web server
 - `{instance}_rediacc_intranet` - Internal network for API ↔ SQL
 
 ## Troubleshooting
