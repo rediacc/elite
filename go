@@ -545,8 +545,15 @@ reset() {
     echo "Starting reset process..."
     echo ""
 
-    # Step 1: Stop all services
+    # Step 1: Stop all services (including orphaned containers from old naming)
     echo "[1/5] Stopping all services..."
+
+    # First, forcefully remove all containers matching the project prefix (handles renamed services)
+    local project_prefix="${INSTANCE_NAME:-rediacc}"
+    echo "  - Removing all containers with prefix '${project_prefix}-'..."
+    docker ps -a --filter "name=^${project_prefix}-" --format "{{.ID}}" | xargs -r docker rm -f 2>/dev/null || true
+
+    # Then run standard compose down for network cleanup
     down
     echo ""
 
