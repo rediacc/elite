@@ -182,17 +182,10 @@ jobs:
           echo "✅ Credentials cleaned - environment is now safe for debug access"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-      - name: Checkout ops repository for VM provisioning
-        if: github.event.inputs.enable-vms == 'true'
-        uses: actions/checkout@v4
-        with:
-          repository: rediacc/ops
-          path: ops
-          
       - name: Provision VMs
         if: github.event.inputs.enable-vms == 'true'
         id: vms
-        uses: ./ops/.github/actions/setup-vms
+        uses: rediacc/ops/.github/actions/setup-vms@main
         with:
           provider: ${{ github.event.inputs.vm-provider || 'kvm' }}
           configuration: ${{ github.event.inputs.vm-configuration || 'Basic' }}
