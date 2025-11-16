@@ -160,25 +160,7 @@ if [ ! -f ".env.secret" ]; then
     # Use REDIACC_DATABASE_NAME if set, otherwise default to RediaccMiddleware
     DB_NAME="${REDIACC_DATABASE_NAME:-RediaccMiddleware}"
 
-    # Generate SSH keys for team vault
-    SSH_KEY_TEMP_DIR=$(mktemp -d)
-    SSH_KEY_FILE="$SSH_KEY_TEMP_DIR/id_rsa"
-    ssh-keygen -t rsa -b 2048 -f "$SSH_KEY_FILE" -q -N "" -C "rediacc-team-default" 2>/dev/null
-
-    # Base64 encode keys (single line, no wrapping)
-    # Try -w 0 flag first (GNU base64), fallback to tr method (BSD base64)
-    if base64 --help 2>&1 | grep -q -- '-w'; then
-        SSH_PRIVATE_KEY_B64=$(base64 -w 0 "$SSH_KEY_FILE")
-        SSH_PUBLIC_KEY_B64=$(base64 -w 0 "$SSH_KEY_FILE.pub")
-    else
-        SSH_PRIVATE_KEY_B64=$(base64 "$SSH_KEY_FILE" | tr -d '\n')
-        SSH_PUBLIC_KEY_B64=$(base64 "$SSH_KEY_FILE.pub" | tr -d '\n')
-    fi
-
-    # Clean up temp directory
-    rm -rf "$SSH_KEY_TEMP_DIR"
-
-    # Create .env.secret file with database passwords and SSH keys
+    # Create .env.secret file with database passwords
     cat > .env.secret << EOF
 # Database configuration - KEEP THIS FILE SECRET!
 MSSQL_SA_PASSWORD="${SA_RANDOM_PASSWORD}"
@@ -186,13 +168,9 @@ MSSQL_RA_PASSWORD="${RA_RANDOM_PASSWORD}"
 REDIACC_DATABASE_NAME="${DB_NAME}"
 REDIACC_SQL_USERNAME="rediacc"
 CONNECTION_STRING="Server=sql,1433;Database=${DB_NAME};User Id=rediacc;Password=\"${RA_RANDOM_PASSWORD}\";TrustServerCertificate=True;Application Name=${DB_NAME};Max Pool Size=32;Min Pool Size=2;Connection Lifetime=120;Connection Timeout=15;Command Timeout=30;Pooling=true;MultipleActiveResultSets=false;Packet Size=32768"
-
-# SSH Keys for team vault (base64 encoded)
-SSH_PRIVATE_KEY_B64="${SSH_PRIVATE_KEY_B64}"
-SSH_PUBLIC_KEY_B64="${SSH_PUBLIC_KEY_B64}"
 EOF
 
-    echo -e "\e[32m.env.secret file created with random passwords and SSH keys.\e[0m"
+    echo -e "\e[32m.env.secret file created with random passwords.\e[0m"
     echo -e "\e[31mIMPORTANT: Keep .env.secret secure and never commit it to git!\e[0m"
 fi
 
