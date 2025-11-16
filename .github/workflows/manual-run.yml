@@ -28,6 +28,54 @@ on:
         required: false
         default: 'latest'
         type: string
+      enable-vms:
+        description: 'Enable VM provisioning for infrastructure testing'
+        required: false
+        default: false
+        type: boolean
+      vm-provider:
+        description: 'VM infrastructure provider (only if VMs enabled)'
+        required: false
+        default: 'kvm'
+        type: choice
+        options:
+          - 'kvm'
+          - 'linode'
+          - 'vultr'
+      vm-configuration:
+        description: 'VM cluster configuration (only if VMs enabled)'
+        required: false
+        default: 'Basic'
+        type: choice
+        options:
+          - 'Minimal'
+          - 'Basic'
+          - 'Standard'
+          - 'Full'
+      vm-os-image:
+        description: 'VM OS image (only if VMs enabled)'
+        required: false
+        default: 'rediacc-ubuntu-24.04'
+        type: choice
+        options:
+          - 'ubuntu-24.04'
+          - 'debian-12'
+          - 'debian-11'
+          - 'fedora-43'
+          - 'fedora-42'
+          - 'oracle-linux-9'
+          - 'oracle-linux-8'
+          - 'opensuse-15.6'
+          - 'opensuse-15.5'
+          - 'rocky-9'
+          - 'centos-stream-10'
+          - 'rediacc-ubuntu-24.04'
+          - 'rediacc-debian-12'
+          - 'rediacc-debian-11'
+          - 'rediacc-fedora-43'
+          - 'rediacc-oracle-linux-9'
+          - 'rediacc-opensuse-15.5'
+          - 'rediacc-centos-stream-10'
       enable-debug:
         description: 'Enable tmate SSH debugging session'
         required: false
@@ -46,7 +94,7 @@ jobs:
   run-services:
     name: Run Rediacc Elite Services
     runs-on: ubuntu-latest
-    timeout-minutes: 320  # 5 hours 20 minutes max
+    timeout-minutes: 420  # 7 hours max (including VM provisioning time)
 
     steps:
       - name: Checkout Repository
@@ -134,6 +182,43 @@ jobs:
           echo "✅ Credentials cleaned - environment is now safe for debug access"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
+      - name: Provision VMs
+        if: github.event.inputs.enable-vms == 'true'
+        id: vms
+        uses: rediacc/ops/.github/actions/setup-vms@main
+        with:
+          provider: ${{ github.event.inputs.vm-provider || 'kvm' }}
+          configuration: ${{ github.event.inputs.vm-configuration || 'Basic' }}
+          duration: ${{ github.event.inputs.duration }}
+          api-token: ${{ 
+            github.event.inputs.vm-provider == 'linode' && secrets.LINODE_API_TOKEN || 
+            github.event.inputs.vm-provider == 'vultr' && secrets.VULTR_API_TOKEN || 
+            '' 
+          }}
+        env:
+          VM_OS_IMAGE: ${{ github.event.inputs.vm-os-image || 'rediacc-ubuntu-24.04' }}
+
+      - name: Display VM Information
+        if: github.event.inputs.enable-vms == 'true'
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🖥️  VM Infrastructure Provisioned"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "📦 VM CONFIGURATION:"
+          echo "   • Provider: ${{ github.event.inputs.vm-provider || 'kvm' }}"
+          echo "   • Configuration: ${{ github.event.inputs.vm-configuration || 'Basic' }}"
+          echo "   • OS Image: ${{ github.event.inputs.vm-os-image || 'rediacc-ubuntu-24.04' }}"
+          echo "   • Status: ${{ steps.vms.outputs.status }}"
+          echo ""
+          echo "🌐 VM ACCESS:"
+          echo "   • Bridge IP: ${{ steps.vms.outputs.bridge-ip }}"
+          echo "   • Worker IPs: ${{ steps.vms.outputs.worker-ips }}"
+          echo "   • Registry: ${{ steps.vms.outputs.registry-url }}"
+          echo ""
+          echo "⚙️  Elite services will be deployed to VM infrastructure"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
       - name: Create Debug Session
         if: github.event.inputs.enable-debug == 'true'
         id: tmate
@@ -145,6 +230,31 @@ jobs:
       # This ensures no GITHUB_TOKEN is present in the environment when debug access is available
       # All required images have been pre-pulled, so no authentication is needed from this point forward
 
+      - name: Configure Deployment Environment
+        run: |
+          if [ "${{ github.event.inputs.enable-vms }}" == "true" ]; then
+            # VM deployment configuration
+            echo "DEPLOYMENT_TARGET=vm" >> $GITHUB_ENV
+            echo "DEPLOYMENT_HOST=${{ steps.vms.outputs.bridge-ip }}" >> $GITHUB_ENV
+            echo "DEPLOYMENT_REGISTRY=${{ steps.vms.outputs.registry-url }}" >> $GITHUB_ENV
+            echo "VM_BRIDGE_IP=${{ steps.vms.outputs.bridge-ip }}" >> $GITHUB_ENV
+            echo "VM_WORKER_IPS=${{ steps.vms.outputs.worker-ips }}" >> $GITHUB_ENV
+            
+            # Override registry for VM deployment
+            echo "DOCKER_REGISTRY=${{ steps.vms.outputs.registry-url }}" >> $GITHUB_ENV
+            
+            echo "🖥️  Deployment target: VM Infrastructure"
+            echo "   Bridge IP: ${{ steps.vms.outputs.bridge-ip }}"
+            echo "   Registry: ${{ steps.vms.outputs.registry-url }}"
+          else
+            # GitHub runner deployment configuration (default)
+            echo "DEPLOYMENT_TARGET=runner" >> $GITHUB_ENV
+            echo "DEPLOYMENT_HOST=localhost" >> $GITHUB_ENV
+            echo "DEPLOYMENT_REGISTRY=${DOCKER_REGISTRY}" >> $GITHUB_ENV
+            
+            echo "🐳 Deployment target: GitHub Runner (Docker)"
+          fi
+
       - name: Start Rediacc Elite Services
         id: services
         uses: ./action
@@ -152,6 +262,11 @@ jobs:
           keep-alive: true  # Don't auto-cleanup, we'll handle it manually
         env:
           TAG: ${{ env.TAG }}
+          # Pass VM configuration to action if VMs are enabled
+          VM_DEPLOYMENT: ${{ github.event.inputs.enable-vms == 'true' && 'true' || 'false' }}
+          VM_BRIDGE_IP: ${{ env.VM_BRIDGE_IP }}
+          VM_REGISTRY: ${{ env.DEPLOYMENT_REGISTRY }}
+          DEPLOYMENT_TARGET: ${{ env.DEPLOYMENT_TARGET }}
 
       - name: Display Service Information
         run: |
@@ -171,12 +286,36 @@ jobs:
           echo "📦 DOCKER IMAGE VERSION: ${{ env.TAG }}"
           echo "⏱️  SELECTED DURATION: ${DURATION} minutes ($TRIGGER_TYPE)"
           echo ""
-          echo "📍 Local Service URLs:"
-          echo "   • API URL: ${{ steps.services.outputs.api-url }}"
-          echo "   • Web UI: http://localhost"
-          echo ""
-          echo "🗄️  Database Connection:"
-          echo "   • SQL Server: ${{ steps.services.outputs.sql-connection }}"
+          
+          # Display deployment-specific information
+          if [ "${{ github.event.inputs.enable-vms }}" == "true" ]; then
+            echo "🖥️  DEPLOYMENT: VM Infrastructure"
+            echo "   • Provider: ${{ github.event.inputs.vm-provider || 'kvm' }}"
+            echo "   • Configuration: ${{ github.event.inputs.vm-configuration || 'Basic' }}"
+            echo "   • Bridge IP: ${{ steps.vms.outputs.bridge-ip }}"
+            echo "   • Worker IPs: ${{ steps.vms.outputs.worker-ips }}"
+            echo "   • VM Registry: ${{ steps.vms.outputs.registry-url }}"
+            echo ""
+            echo "📍 VM Service URLs:"
+            echo "   • API URL: http://${{ steps.vms.outputs.bridge-ip }}"
+            echo "   • Web UI: http://${{ steps.vms.outputs.bridge-ip }}"
+            echo ""
+            echo "🗄️  Database Connection:"
+            echo "   • SQL Server: ${{ steps.services.outputs.sql-connection }}"
+            echo ""
+            echo "🔗 SSH Access to Bridge VM:"
+            echo "   ssh -i ~/.ssh/vm_key ubuntu@${{ steps.vms.outputs.bridge-ip }}"
+          else
+            echo "🐳 DEPLOYMENT: GitHub Runner (Docker)"
+            echo ""
+            echo "📍 Local Service URLs:"
+            echo "   • API URL: ${{ steps.services.outputs.api-url }}"
+            echo "   • Web UI: http://localhost"
+            echo ""
+            echo "🗄️  Database Connection:"
+            echo "   • SQL Server: ${{ steps.services.outputs.sql-connection }}"
+          fi
+          
           echo ""
           echo "⏳ Setting up public access via Cloudflare Tunnel..."
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -188,7 +327,7 @@ jobs:
         id: tunnel
         uses: rediacc/action-cloudflare-tunnel@v1
         with:
-          url: http://localhost
+          url: ${{ github.event.inputs.enable-vms == 'true' && format('http://{0}', steps.vms.outputs.bridge-ip) || 'http://localhost' }}
           timeout: 30
 
       - name: Display Access Information

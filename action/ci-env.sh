@@ -53,6 +53,12 @@ else
     export DOCKER_REGISTRY_PASSWORD="${DOCKER_REGISTRY_PASSWORD}"
 fi
 
+# Override registry if VM deployment is enabled
+if [ "$VM_DEPLOYMENT" == "true" ] && [ -n "$VM_REGISTRY" ]; then
+    echo "VM deployment detected - using VM registry: $VM_REGISTRY"
+    export DOCKER_REGISTRY="$VM_REGISTRY"
+fi
+
 # Export configuration from .env (now available after sourcing)
 export SYSTEM_DOMAIN="${SYSTEM_DOMAIN}"
 export DOCKER_REGISTRY="${DOCKER_REGISTRY}"
