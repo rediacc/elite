@@ -190,11 +190,7 @@ jobs:
           provider: ${{ github.event.inputs.vm-provider || 'kvm' }}
           configuration: ${{ github.event.inputs.vm-configuration || 'Basic' }}
           duration: ${{ github.event.inputs.duration }}
-          api-token: ${{ 
-            github.event.inputs.vm-provider == 'linode' && secrets.LINODE_API_TOKEN || 
-            github.event.inputs.vm-provider == 'vultr' && secrets.VULTR_API_TOKEN || 
-            '' 
-          }}
+          api-token: ${{ github.event.inputs.vm-provider == 'linode' && secrets.LINODE_API_TOKEN || github.event.inputs.vm-provider == 'vultr' && secrets.VULTR_API_TOKEN || '' }}
         env:
           VM_OS_IMAGE: ${{ github.event.inputs.vm-os-image || 'rediacc-ubuntu-24.04' }}
 
