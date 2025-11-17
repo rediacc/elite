@@ -260,6 +260,15 @@ jobs:
           url: http://localhost
           timeout: 30
 
+      - name: Initial Service Status
+        run: |
+          echo ""
+          echo "📊 Initial Service Status:"
+          ./go status
+          echo ""
+          echo "✅ Health Check:"
+          ./go health
+
       - name: Display Access Information
         run: |
           echo ""
@@ -316,15 +325,6 @@ jobs:
 
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-      - name: Initial Service Status
-        run: |
-          echo ""
-          echo "📊 Initial Service Status:"
-          ./go status
-          echo ""
-          echo "✅ Health Check:"
-          ./go health
-
       - name: Keep Services Alive
         run: |
           # Read duration from saved file
@@ -357,18 +357,6 @@ jobs:
               echo ""
               echo "📋 Container Status:"
               ./go status
-            fi
-
-            # Display access information
-            if [ -n "$TUNNEL_URL" ]; then
-              echo ""
-              echo "🌍 Public URL: $TUNNEL_URL"
-            fi
-
-            # Display debug access if enabled
-            if [ "${{ github.event.inputs.enable-debug }}" == "true" ]; then
-              echo "🔧 Debug SSH: ${{ steps.tmate.outputs.ssh-connection }}"
-              echo "🔧 Debug Web: ${{ steps.tmate.outputs.web-url }}"
             fi
 
             # Calculate next check or remaining time
