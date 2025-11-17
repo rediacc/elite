@@ -1,11 +1,18 @@
 name: Manual Service Run
 
+run-name: "${{ github.event.inputs.run-name || 'Manual Service Run' }}"
+
 # Run services for a specified duration
 # - Manual: workflow_dispatch with custom duration
 # - Automatic: on push and daily schedule (5 minutes)
 on:
   workflow_dispatch:
     inputs:
+      run-name:
+        description: 'Custom name for this run (e.g., "E2E Tests - Login Flow")'
+        required: false
+        default: 'Manual Service Run'
+        type: string
       duration:
         description: 'Duration to keep services running (minutes)'
         required: true
@@ -82,7 +89,7 @@ on:
         default: false
         type: boolean
       skip-machine-registration:
-        description: 'Skip automatic machine registration (for debugging or manual setup)'
+        description: 'Skip automatic machine registration'
         required: false
         default: false
         type: boolean
@@ -118,6 +125,80 @@ jobs:
           TAG: ${{ env.TAG }}
         run: ./action/ci-pull-images.sh
 
+      - name: Create Debug Session
+        if: github.event.inputs.enable-debug == 'true'
+        id: tmate
+        uses: rediacc/action-tmate@v1
+        with:
+          timeout: 60
+
+      # SECURITY NOTE: tmate debug session is started BEFORE services
+      # This ensures no GITHUB_TOKEN is present in the environment when debug access is available
+      # All required images have been pre-pulled, so no authentication is needed from this point forward
+
+      - name: Start Rediacc Elite Services
+        id: services
+        uses: ./action
+        with:
+          keep-alive: true  # Don't auto-cleanup, we'll handle it manually
+        env:
+          TAG: ${{ env.TAG }}
+          # Machine registration will happen later after VMs are provisioned
+          SKIP_MACHINE_REGISTRATION: 'true'
+
+      - name: Extract SSH Keys from Middleware
+        if: github.event.inputs.enable-vms == 'true'
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🔑 Extracting SSH Keys from Middleware"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+          cd elite
+
+          # Wait for middleware to be fully ready
+          echo "Waiting for middleware to be ready..."
+          timeout 60 bash -c 'until ./go health; do sleep 2; done'
+          echo "✓ Middleware is healthy"
+
+          # Install rediacc CLI
+          pip install --quiet rediacc
+
+          # Source environment for credentials
+          source action/ci-env.sh
+
+          # Login to middleware
+          echo "Logging in to middleware..."
+          rediacc auth login \
+            --endpoint "$SYSTEM_API_URL" \
+            --email "$SYSTEM_ADMIN_EMAIL" \
+            --password "$SYSTEM_ADMIN_PASSWORD"
+
+          # Fetch team vault
+          echo "Fetching team vault..."
+          TEAM_VAULT=$(rediacc GetCompanyTeams --output json | \
+            jq -r --arg team "$SYSTEM_DEFAULT_TEAM_NAME" \
+            '.data.result[] | select(.teamName == $team or .TeamName == $team) | .vaultContent')
+
+          # Extract and decode SSH keys
+          echo "Extracting SSH keys from vault..."
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          echo "$TEAM_VAULT" | jq -r '.SSH_PRIVATE_KEY' | base64 -d > ~/.ssh/id_rsa
+          echo "$TEAM_VAULT" | jq -r '.SSH_PUBLIC_KEY' | base64 -d > ~/.ssh/id_rsa.pub
+
+          chmod 600 ~/.ssh/id_rsa
+          chmod 644 ~/.ssh/id_rsa.pub
+
+          echo "✓ SSH keys extracted and written to ~/.ssh/"
+          echo "Key fingerprint:"
+          ssh-keygen -lf ~/.ssh/id_rsa.pub
+
+          # Logout
+          rediacc auth logout
+
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
       - name: Provision VMs
         if: github.event.inputs.enable-vms == 'true'
         id: vms
@@ -148,61 +229,24 @@ jobs:
           echo "   • Worker IPs: ${{ steps.vms.outputs.worker-ips }}"
           echo "   • Registry: ${{ steps.vms.outputs.registry-url }}"
           echo ""
-          echo "⚙️  Elite services will be deployed to VM infrastructure"
-          echo "⚙️  SSH configured by SDK for seamless VM access"
+          echo "🔑 SSH KEYS: Using keys from middleware (single source of truth)"
+          echo "⚙️  VMs are now accessible with middleware's SSH keys"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-      - name: Create Debug Session
-        if: github.event.inputs.enable-debug == 'true'
-        id: tmate
-        uses: rediacc/action-tmate@v1
-        with:
-          timeout: 60
-
-      # SECURITY NOTE: tmate debug session is started BEFORE services
-      # This ensures no GITHUB_TOKEN is present in the environment when debug access is available
-      # All required images have been pre-pulled, so no authentication is needed from this point forward
-
-      - name: Configure Deployment Environment
+      - name: Register Worker Machines
+        if: github.event.inputs.enable-vms == 'true' && github.event.inputs.skip-machine-registration != 'true'
         run: |
-          if [ "${{ github.event.inputs.enable-vms }}" == "true" ]; then
-            # VM deployment configuration
-            echo "DEPLOYMENT_TARGET=vm" >> $GITHUB_ENV
-            echo "DEPLOYMENT_HOST=${{ steps.vms.outputs.bridge-ip }}" >> $GITHUB_ENV
-            echo "DEPLOYMENT_REGISTRY=${{ steps.vms.outputs.registry-url }}" >> $GITHUB_ENV
-            echo "VM_BRIDGE_IP=${{ steps.vms.outputs.bridge-ip }}" >> $GITHUB_ENV
-            echo "VM_WORKER_IPS=${{ steps.vms.outputs.worker-ips }}" >> $GITHUB_ENV
-            
-            # Override registry for VM deployment
-            echo "DOCKER_REGISTRY=${{ steps.vms.outputs.registry-url }}" >> $GITHUB_ENV
-            
-            echo "🖥️  Deployment target: VM Infrastructure"
-            echo "   Bridge IP: ${{ steps.vms.outputs.bridge-ip }}"
-            echo "   Registry: ${{ steps.vms.outputs.registry-url }}"
-          else
-            # GitHub runner deployment configuration (default)
-            echo "DEPLOYMENT_TARGET=runner" >> $GITHUB_ENV
-            echo "DEPLOYMENT_HOST=localhost" >> $GITHUB_ENV
-            echo "DEPLOYMENT_REGISTRY=${DOCKER_REGISTRY}" >> $GITHUB_ENV
-            
-            echo "🐳 Deployment target: GitHub Runner (Docker)"
-          fi
+          cd elite
+          source action/ci-env.sh
 
-      - name: Start Rediacc Elite Services
-        id: services
-        uses: ./action
-        with:
-          keep-alive: true  # Don't auto-cleanup, we'll handle it manually
-        env:
-          TAG: ${{ env.TAG }}
-          # Pass VM configuration to action if VMs are enabled
-          VM_DEPLOYMENT: ${{ github.event.inputs.enable-vms == 'true' && 'true' || 'false' }}
-          SKIP_MACHINE_REGISTRATION: ${{ github.event.inputs.skip-machine-registration == 'true' && 'true' || 'false' }}
-          VM_BRIDGE_IP: ${{ env.VM_BRIDGE_IP }}
-          VM_WORKER_IPS: ${{ env.VM_WORKER_IPS }}
-          VM_PROVIDER: ${{ github.event.inputs.vm-provider || 'kvm' }}
-          VM_REGISTRY: ${{ env.DEPLOYMENT_REGISTRY }}
-          DEPLOYMENT_TARGET: ${{ env.DEPLOYMENT_TARGET }}
+          # Set environment variables for registration
+          export VM_DEPLOYMENT="true"
+          export VM_BRIDGE_IP="${{ steps.vms.outputs.bridge-ip }}"
+          export VM_WORKER_IPS="${{ steps.vms.outputs.worker-ips }}"
+          export VM_PROVIDER="${{ github.event.inputs.vm-provider || 'kvm' }}"
+
+          echo "Registering worker machines with middleware..."
+          action/ci-register-workers.sh
 
       - name: Display Service Information
         run: |
@@ -332,6 +376,59 @@ jobs:
           fi
 
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - name: Export Deployment Information
+        run: |
+          # Create comprehensive deployment info JSON
+          cat > deployment-info.json << EOF
+          {
+            "metadata": {
+              "run_id": "${{ github.run_id }}",
+              "duration_minutes": ${{ github.event.inputs.duration || 5 }},
+              "version": "${{ env.TAG }}",
+              "triggered_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+              "workflow_url": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            },
+            "access": {
+              "tunnel_url": "${{ steps.tunnel.outputs.tunnel-url }}",
+              "api_url": "${{ steps.services.outputs.api-url }}",
+              "web_url": "http://localhost"
+            },
+            "database": {
+              "connection_string": "Server=sql,1433;Database=RediaccMiddleware;User Id=rediacc;TrustServerCertificate=True"
+            },
+            "vms": {
+              "enabled": ${{ github.event.inputs.enable-vms == 'true' }},
+              "provider": "${{ github.event.inputs.vm-provider || null }}",
+              "configuration": "${{ github.event.inputs.vm-configuration || null }}",
+              "bridge_ip": "${{ steps.vms.outputs.bridge-ip || null }}",
+              "worker_ips": $(echo '${{ steps.vms.outputs.worker-ips }}' | jq -R 'if . == "" then null else split(",") end'),
+              "registry_url": "${{ steps.vms.outputs.registry-url || null }}",
+              "ssh_access": {
+                "bridge": $(if [ "${{ github.event.inputs.enable-vms }}" == "true" ]; then echo "\"ssh ubuntu@${{ steps.vms.outputs.bridge-ip }}\""; else echo "null"; fi),
+                "workers": $(if [ "${{ github.event.inputs.enable-vms }}" == "true" ]; then echo '${{ steps.vms.outputs.worker-ips }}' | jq -R 'if . == "" then null else split(",") | map("ssh ubuntu@" + .) end'; else echo "null"; fi)
+              }
+            },
+            "debug": {
+              "enabled": ${{ github.event.inputs.enable-debug == 'true' }},
+              "ssh_connection": "${{ steps.tmate.outputs.ssh-connection || null }}",
+              "web_url": "${{ steps.tmate.outputs.web-url || null }}",
+              "ssh_ro_connection": "${{ steps.tmate.outputs.ssh-ro-connection || null }}",
+              "web_ro_url": "${{ steps.tmate.outputs.web-ro-url || null }}"
+            }
+          }
+          EOF
+
+          # Pretty print for logs
+          echo "📋 Deployment Information:"
+          cat deployment-info.json | jq .
+
+      - name: Upload Deployment Info Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-info-${{ github.run_id }}
+          path: deployment-info.json
+          retention-days: 1
 
       - name: Keep Services Alive
         run: |
