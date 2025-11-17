@@ -38,7 +38,7 @@ on:
       enable-vms:
         description: 'Enable VM provisioning for infrastructure testing'
         required: false
-        default: false
+        default: true
         type: boolean
       vm-provider:
         description: 'VM infrastructure provider (only if VMs enabled)'
@@ -52,7 +52,7 @@ on:
       vm-configuration:
         description: 'VM cluster configuration (only if VMs enabled)'
         required: false
-        default: 'Basic'
+        default: 'Standard'
         type: choice
         options:
           - 'Minimal'
