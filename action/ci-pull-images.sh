@@ -21,13 +21,13 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 
     # Pull all required images
     echo "Pulling web:${TAG}..."
-    docker pull "${DOCKER_REGISTRY}/web:${TAG}"
+    docker pull --quiet "${DOCKER_REGISTRY}/web:${TAG}"
 
     echo "Pulling api:${TAG}..."
-    docker pull "${DOCKER_REGISTRY}/api:${TAG}"
+    docker pull --quiet "${DOCKER_REGISTRY}/api:${TAG}"
 
     echo "Pulling bridge image..."
-    docker pull "${DOCKER_BRIDGE_IMAGE}"
+    docker pull --quiet "${DOCKER_BRIDGE_IMAGE}"
 
     echo "✅ All images pulled successfully"
 )
