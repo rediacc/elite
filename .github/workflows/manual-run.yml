@@ -148,6 +148,8 @@ jobs:
 
       - name: Extract SSH Keys from Middleware
         if: github.event.inputs.enable-vms == 'true'
+        env:
+          TAG: ${{ env.TAG }}
         run: |
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "🔑 Extracting SSH Keys from Middleware"
@@ -158,14 +160,20 @@ jobs:
           timeout 60 bash -c 'until ./go health; do sleep 2; done'
           echo "✓ Middleware is healthy"
 
-          # Install rediacc CLI
-          pip install --quiet rediacc
+          # Install rediacc CLI (match version to TAG)
+          TAG_VERSION="${TAG:-latest}"
+          if [ "$TAG_VERSION" = "latest" ]; then
+            pip install --quiet rediacc
+          else
+            pip install --quiet "rediacc==$TAG_VERSION" 2>/dev/null || pip install --quiet rediacc
+          fi
 
           # Source environment for credentials
           source action/ci-env.sh
 
           # Login to middleware
           echo "Logging in to middleware..."
+          echo "API URL: $SYSTEM_API_URL"
           rediacc auth login \
             --endpoint "$SYSTEM_API_URL" \
             --email "$SYSTEM_ADMIN_EMAIL" \
