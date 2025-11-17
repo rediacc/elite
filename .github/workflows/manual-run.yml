@@ -153,8 +153,6 @@ jobs:
           echo "🔑 Extracting SSH Keys from Middleware"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-          cd elite
-
           # Wait for middleware to be fully ready
           echo "Waiting for middleware to be ready..."
           timeout 60 bash -c 'until ./go health; do sleep 2; done'
@@ -236,7 +234,6 @@ jobs:
       - name: Register Worker Machines
         if: github.event.inputs.enable-vms == 'true' && github.event.inputs.skip-machine-registration != 'true'
         run: |
-          cd elite
           source action/ci-env.sh
 
           # Set environment variables for registration
