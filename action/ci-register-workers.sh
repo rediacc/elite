@@ -55,6 +55,42 @@ echo "  Bridge IP: $BRIDGE_IP"
 echo "  API URL: $SYSTEM_API_URL"
 echo ""
 
+# Install rediacc CLI from PyPI if not already installed
+# Skip installation if REDIACC_SKIP_CLI_INSTALL is set (e.g., when testing local CLI changes)
+if [ "$REDIACC_SKIP_CLI_INSTALL" = "true" ]; then
+    echo "⚠ Skipping CLI installation (REDIACC_SKIP_CLI_INSTALL=true)"
+    if ! command -v rediacc &> /dev/null; then
+        echo "Error: REDIACC_SKIP_CLI_INSTALL is set but rediacc CLI is not installed"
+        exit 1
+    fi
+    echo "✓ Using existing rediacc CLI installation"
+elif ! command -v rediacc &> /dev/null; then
+    # Derive CLI version from TAG environment variable (used for Docker images)
+    # TAG format: 0.1.67, 0.2.1, or latest (no v prefix)
+    CLI_VERSION="${TAG:-latest}"
+
+    if [ "$CLI_VERSION" = "latest" ]; then
+        echo "Installing latest rediacc CLI from PyPI..."
+        pip install --quiet rediacc
+    else
+        # If version starts with comparison operator (>=, ==, ~=, etc.), use as-is
+        # Otherwise, add == for exact version match
+        case "$CLI_VERSION" in
+            [\>\<\=\~\!]*)
+                echo "Installing rediacc CLI with constraint: $CLI_VERSION..."
+                pip install --quiet "rediacc${CLI_VERSION}"
+                ;;
+            *)
+                echo "Installing rediacc CLI version: $CLI_VERSION..."
+                pip install --quiet "rediacc==$CLI_VERSION"
+                ;;
+        esac
+    fi
+    echo "✓ rediacc CLI installed"
+else
+    echo "✓ rediacc CLI already installed"
+fi
+
 # Helper function to run CLI command
 _run_cli_command() {
     rediacc "$@"
