@@ -125,7 +125,7 @@ _register_machine() {
     fi
 }
 
-# Helper function to queue setup task for a machine (KVM only)
+# Helper function to queue setup task for a machine
 _queue_setup_task() {
     local ip="$1"
     local machine_name="$2"
@@ -208,45 +208,43 @@ echo "✓ Logged in successfully"
 # Wait a moment for token to be saved
 sleep 0.5
 
-# Fetch vault data if we need to queue setup tasks (KVM only)
-if [ "$PROVIDER" = "kvm" ]; then
-    echo ""
-    echo "Step 2: Fetching vault data for setup tasks"
-    echo "---------------------------------------------"
+# Fetch vault data for setup tasks
+echo ""
+echo "Step 2: Fetching vault data for setup tasks"
+echo "---------------------------------------------"
 
-    # Fetch company credential and vault data
-    echo "Fetching company vault..."
-    COMPANY_RESPONSE=$(_run_cli_command GetCompanyVault --output json)
+# Fetch company credential and vault data
+echo "Fetching company vault..."
+COMPANY_RESPONSE=$(_run_cli_command GetCompanyVault --output json)
+
+if [ $? -ne 0 ]; then
+    echo "Warning: Could not fetch company vault data"
+    echo "Setup tasks will not be queued"
+    SKIP_SETUP=true
+else
+    # Extract company credential (becomes COMPANY_ID)
+    COMPANY_CREDENTIAL=$(echo "$COMPANY_RESPONSE" | jq -r '.data.result[0].companyCredential // .data.result[0].CompanyCredential')
+    COMPANY_VAULT_STR=$(echo "$COMPANY_RESPONSE" | jq -r '.data.result[0].vaultContent // .data.result[0].VaultContent')
+    echo "✓ Company credential: ${COMPANY_CREDENTIAL:0:8}..."
+
+    # Fetch team vault data
+    echo "Fetching team vault..."
+    TEAMS_RESPONSE=$(_run_cli_command GetCompanyTeams --output json)
 
     if [ $? -ne 0 ]; then
-        echo "Warning: Could not fetch company vault data"
+        echo "Warning: Could not fetch teams data"
         echo "Setup tasks will not be queued"
         SKIP_SETUP=true
     else
-        # Extract company credential (becomes COMPANY_ID)
-        COMPANY_CREDENTIAL=$(echo "$COMPANY_RESPONSE" | jq -r '.data.result[0].companyCredential // .data.result[0].CompanyCredential')
-        COMPANY_VAULT_STR=$(echo "$COMPANY_RESPONSE" | jq -r '.data.result[0].vaultContent // .data.result[0].VaultContent')
-        echo "✓ Company credential: ${COMPANY_CREDENTIAL:0:8}..."
+        # Find the default team and extract its vault
+        TEAM_VAULT_STR=$(echo "$TEAMS_RESPONSE" | jq -r --arg team "$SYSTEM_DEFAULT_TEAM_NAME" '
+            .data.result[] | select(.teamName == $team or .TeamName == $team) | (.vaultContent // .VaultContent)
+        ')
 
-        # Fetch team vault data
-        echo "Fetching team vault..."
-        TEAMS_RESPONSE=$(_run_cli_command GetCompanyTeams --output json)
-
-        if [ $? -ne 0 ]; then
-            echo "Warning: Could not fetch teams data"
-            echo "Setup tasks will not be queued"
-            SKIP_SETUP=true
-        else
-            # Find the default team and extract its vault
-            TEAM_VAULT_STR=$(echo "$TEAMS_RESPONSE" | jq -r --arg team "$SYSTEM_DEFAULT_TEAM_NAME" '
-                .data.result[] | select(.teamName == $team or .TeamName == $team) | (.vaultContent // .VaultContent)
-            ')
-
-            # Parse vaults and add COMPANY_ID
-            COMPANY_VAULT_JSON=$(echo "$COMPANY_VAULT_STR" | jq --arg id "$COMPANY_CREDENTIAL" '. + {COMPANY_ID: $id}')
-            TEAM_VAULT_JSON=$(echo "$TEAM_VAULT_STR" | jq '.')
-            echo "✓ Vault data fetched successfully"
-        fi
+        # Parse vaults and add COMPANY_ID
+        COMPANY_VAULT_JSON=$(echo "$COMPANY_VAULT_STR" | jq --arg id "$COMPANY_CREDENTIAL" '. + {COMPANY_ID: $id}')
+        TEAM_VAULT_JSON=$(echo "$TEAM_VAULT_STR" | jq '.')
+        echo "✓ Vault data fetched successfully"
     fi
 fi
 
@@ -330,11 +328,11 @@ if [ -n "$BRIDGE_IP" ]; then
     fi
 fi
 
-# Queue setup tasks for KVM machines
-if [ "$PROVIDER" = "kvm" ] && [ "$SKIP_SETUP" != "true" ] && [ ${#REGISTERED_MACHINES[@]} -gt 0 ]; then
+# Queue setup tasks for all machines
+if [ "$SKIP_SETUP" != "true" ] && [ ${#REGISTERED_MACHINES[@]} -gt 0 ]; then
     echo ""
-    echo "Step 4: Queueing setup tasks for KVM machines"
-    echo "----------------------------------------------"
+    echo "Step 4: Queueing setup tasks"
+    echo "----------------------------"
 
     for machine_name in "${!REGISTERED_MACHINES[@]}"; do
         # Parse stored data
@@ -366,15 +364,9 @@ echo ""
 echo "Summary:"
 echo "  Successfully registered: $REGISTERED_COUNT"
 echo "  Failed or skipped: $FAILED_COUNT"
-
-if [ "$PROVIDER" = "kvm" ]; then
-    echo "  Setup tasks queued: $SETUP_QUEUED_COUNT"
-    echo "  Setup tasks failed: $SETUP_FAILED_COUNT"
-    echo ""
-    echo "Note: Bridge will process setup tasks to install required dependencies."
-else
-    echo ""
-    echo "Note: Cloud provider VMs ($PROVIDER) are pre-configured."
-    echo "      No setup tasks needed."
-fi
+echo "  Setup tasks queued: $SETUP_QUEUED_COUNT"
+echo "  Setup tasks failed: $SETUP_FAILED_COUNT"
+echo ""
+echo "Note: Bridge will process setup tasks to install required dependencies."
+echo "      This applies to all machines regardless of provider ($PROVIDER)."
 echo ""
