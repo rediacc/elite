@@ -1,6 +1,6 @@
 #!/bin/bash
-# CI Script: Register VM workers with Rediacc middleware
-# Discovers VMs from setup-vms action outputs and registers them as machines
+# CI Script: Register worker machines with Rediacc middleware
+# Discovers infrastructure (VMs, bare metal, etc.) and registers as machines
 
 set -e
 
@@ -9,7 +9,7 @@ ELITE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PROJECT_ROOT="$(cd "$ELITE_DIR/../.." && pwd)"
 
 echo "============================================"
-echo "Registering VM workers with middleware"
+echo "Registering worker machines with middleware"
 echo "============================================"
 
 # Source CI environment variables
@@ -358,7 +358,7 @@ echo "✓ Logged out"
 
 echo ""
 echo "============================================"
-echo "✓ VM worker registration complete"
+echo "✓ Worker machine registration complete"
 echo "============================================"
 echo ""
 echo "Summary:"

@@ -46,12 +46,12 @@ timeout 120 bash -c 'until ./go health; do sleep 2; done' || {
 
 echo "Services are ready!"
 
-# Register VM workers with middleware if VM deployment is enabled
+# Register worker machines with middleware if VM deployment is enabled
 if [ "$VM_DEPLOYMENT" == "true" ]; then
     echo ""
-    echo "Registering VM workers with middleware..."
-    action/ci-add-vm-workers.sh || {
-        echo "Warning: Could not register VM workers. Queue tasks may fail."
+    echo "Registering worker machines with middleware..."
+    action/ci-register-workers.sh || {
+        echo "Warning: Could not register worker machines. Queue tasks may fail."
     }
 else
     echo ""
