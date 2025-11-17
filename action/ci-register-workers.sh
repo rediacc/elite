@@ -82,7 +82,11 @@ elif ! command -v rediacc &> /dev/null; then
                 ;;
             *)
                 echo "Installing rediacc CLI version: $CLI_VERSION..."
-                pip install --quiet "rediacc==$CLI_VERSION"
+                # Try specific version, fall back to latest if not available on PyPI
+                if ! pip install --quiet "rediacc==$CLI_VERSION" 2>/dev/null; then
+                    echo "⚠ Version $CLI_VERSION not available on PyPI, falling back to latest..."
+                    pip install --quiet rediacc
+                fi
                 ;;
         esac
     fi
