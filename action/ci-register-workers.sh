@@ -341,33 +341,8 @@ for worker_ip in "${WORKER_IP_ARRAY[@]}"; do
     fi
 done
 
-# Also register bridge if provided
-if [ -n "$BRIDGE_IP" ]; then
-    echo ""
-    echo "Processing bridge: $BRIDGE_IP"
-
-    bridge_name=$(_generate_machine_name "$BRIDGE_IP" "$PROVIDER")
-    # Override name for bridge
-    bridge_name="${PROVIDER}-bridge"
-    echo "  Machine name: $bridge_name"
-
-    echo "  Extracting SSH host key..."
-    if host_key=$(_extract_host_key "$BRIDGE_IP"); then
-        echo "  ✓ Host key extracted: ${host_key:0:50}..."
-
-        echo "  Registering with middleware..."
-        if _register_machine "$BRIDGE_IP" "$bridge_name" "$host_key"; then
-            ((REGISTERED_COUNT++)) || true
-            # Store for setup queueing
-            REGISTERED_MACHINES["$bridge_name"]="$BRIDGE_IP|$host_key"
-        else
-            ((FAILED_COUNT++)) || true
-        fi
-    else
-        echo "  ✗ Failed to extract host key, skipping"
-        ((FAILED_COUNT++)) || true
-    fi
-fi
+# Note: Bridge VM is NOT registered as a machine
+# The bridge is infrastructure that manages workers, not a worker itself
 
 # Queue setup tasks for all machines
 if [ "$SKIP_SETUP" != "true" ] && [ ${#REGISTERED_MACHINES[@]} -gt 0 ]; then
