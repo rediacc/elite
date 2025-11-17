@@ -405,11 +405,8 @@ jobs:
       - name: Summary
         if: always()
         run: |
-          # Read duration from saved file (fallback to "N/A" if not available)
-          DURATION_MIN="N/A"
-          if [ -f /tmp/duration.txt ]; then
-            DURATION_MIN=$(cat /tmp/duration.txt)
-          fi
+          # Get duration from input (or default to 5 if not set)
+          DURATION_MIN="${{ github.event.inputs.duration || '5' }}"
 
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
