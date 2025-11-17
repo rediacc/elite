@@ -144,24 +144,8 @@ jobs:
           echo "   • Registry: ${{ steps.vms.outputs.registry-url }}"
           echo ""
           echo "⚙️  Elite services will be deployed to VM infrastructure"
+          echo "⚙️  SSH configured by SDK for seamless VM access"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-      - name: Configure SSH for VMs
-        if: github.event.inputs.enable-vms == 'true'
-        run: |
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-
-          # Configure SSH to skip host key checking for VM network
-          cat >> ~/.ssh/config <<EOF
-          Host 192.168.111.*
-              StrictHostKeyChecking no
-              UserKnownHostsFile /dev/null
-              LogLevel ERROR
-          EOF
-
-          chmod 600 ~/.ssh/config
-          echo "✓ SSH configured for VM network (192.168.111.0/24)"
 
       - name: Create Debug Session
         if: github.event.inputs.enable-debug == 'true'
