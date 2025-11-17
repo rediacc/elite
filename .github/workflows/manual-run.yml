@@ -146,6 +146,23 @@ jobs:
           echo "⚙️  Elite services will be deployed to VM infrastructure"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
+      - name: Configure SSH for VMs
+        if: github.event.inputs.enable-vms == 'true'
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          # Configure SSH to skip host key checking for VM network
+          cat >> ~/.ssh/config <<EOF
+          Host 192.168.111.*
+              StrictHostKeyChecking no
+              UserKnownHostsFile /dev/null
+              LogLevel ERROR
+          EOF
+
+          chmod 600 ~/.ssh/config
+          echo "✓ SSH configured for VM network (192.168.111.0/24)"
+
       - name: Create Debug Session
         if: github.event.inputs.enable-debug == 'true'
         id: tmate
@@ -261,23 +278,53 @@ jobs:
         run: |
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "🌍 PUBLIC ACCESS"
+          echo "🌍 ACCESS INFORMATION"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo ""
-          echo "   Cloudflare Tunnel: ${{ steps.tunnel.outputs.tunnel-url }}"
+          echo "🌐 WEB ACCESS:"
+          echo "   • Cloudflare Tunnel: ${{ steps.tunnel.outputs.tunnel-url }}"
+          echo ""
+
+          # Display VM infrastructure details if enabled
+          if [ "${{ github.event.inputs.enable-vms }}" == "true" ]; then
+            echo "🖥️  VM INFRASTRUCTURE:"
+            echo "   • Provider: ${{ github.event.inputs.vm-provider || 'kvm' }}"
+            echo "   • Configuration: ${{ github.event.inputs.vm-configuration || 'Basic' }}"
+            echo "   • Bridge IP: ${{ steps.vms.outputs.bridge-ip }}"
+            echo "   • Worker IPs: ${{ steps.vms.outputs.worker-ips }}"
+            echo ""
+            echo "📍 VM SERVICE URLS:"
+            echo "   • API: http://${{ steps.vms.outputs.bridge-ip }}"
+            echo "   • Web UI: http://${{ steps.vms.outputs.bridge-ip }}"
+            echo "   • Registry: ${{ steps.vms.outputs.registry-url }}"
+            echo ""
+            echo "🔐 SSH ACCESS TO VMS:"
+            echo "   • Bridge:  ssh ubuntu@${{ steps.vms.outputs.bridge-ip }}"
+
+            # Parse and display worker IPs
+            IFS=',' read -ra WORKER_ARRAY <<< "${{ steps.vms.outputs.worker-ips }}"
+            for i in "${!WORKER_ARRAY[@]}"; do
+              echo "   • Worker $((i+1)): ssh ubuntu@${WORKER_ARRAY[$i]}"
+            done
+            echo ""
+          else
+            echo "🐳 LOCAL SERVICES:"
+            echo "   • API: ${{ steps.services.outputs.api-url }}"
+            echo "   • Web UI: http://localhost"
+            echo ""
+          fi
+
+          echo "🗄️  DATABASE:"
+          echo "   • SQL Server: ${{ steps.services.outputs.sql-connection }}"
           echo ""
 
           # Display debug access if enabled
           if [ "${{ github.event.inputs.enable-debug }}" == "true" ]; then
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "🔧 DEBUG ACCESS (Interactive Terminal)"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo ""
-            echo "   SSH Terminal:  ${{ steps.tmate.outputs.ssh-connection }}"
-            echo "   Web Terminal:  ${{ steps.tmate.outputs.web-url }}"
-            echo ""
-            echo "   Read-Only SSH: ${{ steps.tmate.outputs.ssh-ro-connection }}"
-            echo "   Read-Only Web: ${{ steps.tmate.outputs.web-ro-url }}"
+            echo "🔧 DEBUG ACCESS (Interactive Terminal):"
+            echo "   • SSH:         ${{ steps.tmate.outputs.ssh-connection }}"
+            echo "   • Web:         ${{ steps.tmate.outputs.web-url }}"
+            echo "   • SSH (RO):    ${{ steps.tmate.outputs.ssh-ro-connection }}"
+            echo "   • Web (RO):    ${{ steps.tmate.outputs.web-ro-url }}"
             echo ""
           fi
 
