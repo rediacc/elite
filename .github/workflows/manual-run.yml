@@ -416,3 +416,21 @@ jobs:
           echo "   • Workflow status: ${{ job.status }}"
           echo "   • Completion time: $(date '+%Y-%m-%d %H:%M:%S')"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+  cleanup-vms:
+    name: Cleanup VM Infrastructure
+    needs: [run-services]
+    if: always() && github.event.inputs.enable-vms == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout SDK Repository
+        uses: actions/checkout@v4
+        with:
+          repository: rediacc/ops
+          ref: main
+
+      - name: Cleanup VMs
+        uses: ./sdk/.github/actions/cleanup-vms
+        with:
+          provider: ${{ github.event.inputs.vm-provider || 'kvm' }}
