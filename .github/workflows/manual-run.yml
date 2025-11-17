@@ -193,6 +193,8 @@ jobs:
           # Pass VM configuration to action if VMs are enabled
           VM_DEPLOYMENT: ${{ github.event.inputs.enable-vms == 'true' && 'true' || 'false' }}
           VM_BRIDGE_IP: ${{ env.VM_BRIDGE_IP }}
+          VM_WORKER_IPS: ${{ env.VM_WORKER_IPS }}
+          VM_PROVIDER: ${{ github.event.inputs.vm-provider || 'kvm' }}
           VM_REGISTRY: ${{ env.DEPLOYMENT_REGISTRY }}
           DEPLOYMENT_TARGET: ${{ env.DEPLOYMENT_TARGET }}
 

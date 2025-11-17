@@ -21,9 +21,10 @@ else
 fi
 
 # Configuration from environment
-PROVIDER="${PROVIDER:-kvm}"
-WORKER_IPS="${WORKER_IPS}"
-BRIDGE_IP="${BRIDGE_IP}"
+# Note: Workflow sets VM_WORKER_IPS, VM_BRIDGE_IP, and VM_PROVIDER
+PROVIDER="${VM_PROVIDER:-${PROVIDER:-kvm}}"
+WORKER_IPS="${VM_WORKER_IPS:-${WORKER_IPS}}"
+BRIDGE_IP="${VM_BRIDGE_IP:-${BRIDGE_IP}}"
 MACHINE_USER="${VM_USR:-runner}"
 MACHINE_DATASTORE="/mnt/datastore"
 
