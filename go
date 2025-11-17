@@ -275,7 +275,7 @@ _check_and_pull_images() {
         # Pull each missing image
         for image in "${missing_images[@]}"; do
             echo "Pulling $image..."
-            if ! docker pull "$image"; then
+            if ! docker pull --quiet "$image"; then
                 echo "Error: Failed to pull $image"
                 echo "Please ensure the image exists in the registry or build it locally"
                 return 1
@@ -454,7 +454,7 @@ _check_and_pull_images_custom() {
         # Pull each missing image
         for image in "${missing_images[@]}"; do
             echo "Pulling $image..."
-            if ! docker pull "$image"; then
+            if ! docker pull --quiet "$image"; then
                 echo "Error: Failed to pull $image"
                 echo "Please ensure the image exists in the registry or build it locally"
                 return 1
@@ -826,9 +826,9 @@ switch() {
         echo ""
         echo "Pulling new images..."
         # Force pull new images
-        docker pull "${DOCKER_REGISTRY}/nginx:${new_version}"
-        docker pull "${DOCKER_REGISTRY}/api:${new_version}"
-        docker pull "${DOCKER_REGISTRY}/bridge:${new_version}"
+        docker pull --quiet "${DOCKER_REGISTRY}/nginx:${new_version}"
+        docker pull --quiet "${DOCKER_REGISTRY}/api:${new_version}"
+        docker pull --quiet "${DOCKER_REGISTRY}/bridge:${new_version}"
 
         echo ""
         echo "Restarting services with new version..."
