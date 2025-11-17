@@ -46,12 +46,18 @@ timeout 120 bash -c 'until ./go health; do sleep 2; done' || {
 
 echo "Services are ready!"
 
-# Add localhost as a machine for CI testing
-echo ""
-echo "Registering localhost as 'local' machine..."
-action/ci-add-localhost-machine.sh || {
-  echo "Warning: Could not register localhost machine. Tests requiring machine access may fail."
-}
+# Register VM workers with middleware if VM deployment is enabled
+if [ "$VM_DEPLOYMENT" == "true" ]; then
+    echo ""
+    echo "Registering VM workers with middleware..."
+    action/ci-add-vm-workers.sh || {
+        echo "Warning: Could not register VM workers. Queue tasks may fail."
+    }
+else
+    echo ""
+    echo "VM deployment not enabled, skipping machine registration..."
+    echo "Note: No machines will be registered for task execution."
+fi
 
 # Output service URLs for workflow use
 if [ "$VM_DEPLOYMENT" == "true" ] && [ -n "$VM_BRIDGE_IP" ]; then
