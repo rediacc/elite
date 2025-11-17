@@ -81,6 +81,11 @@ on:
         required: false
         default: false
         type: boolean
+      skip-machine-registration:
+        description: 'Skip automatic machine registration (for debugging or manual setup)'
+        required: false
+        default: false
+        type: boolean
 
   push:
     branches:
@@ -192,6 +197,7 @@ jobs:
           TAG: ${{ env.TAG }}
           # Pass VM configuration to action if VMs are enabled
           VM_DEPLOYMENT: ${{ github.event.inputs.enable-vms == 'true' && 'true' || 'false' }}
+          SKIP_MACHINE_REGISTRATION: ${{ github.event.inputs.skip-machine-registration == 'true' && 'true' || 'false' }}
           VM_BRIDGE_IP: ${{ env.VM_BRIDGE_IP }}
           VM_WORKER_IPS: ${{ env.VM_WORKER_IPS }}
           VM_PROVIDER: ${{ github.event.inputs.vm-provider || 'kvm' }}

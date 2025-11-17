@@ -47,12 +47,16 @@ timeout 120 bash -c 'until ./go health; do sleep 2; done' || {
 echo "Services are ready!"
 
 # Register worker machines with middleware if VM deployment is enabled
-if [ "$VM_DEPLOYMENT" == "true" ]; then
+if [ "$VM_DEPLOYMENT" == "true" ] && [ "$SKIP_MACHINE_REGISTRATION" != "true" ]; then
     echo ""
     echo "Registering worker machines with middleware..."
     action/ci-register-workers.sh || {
         echo "Warning: Could not register worker machines. Queue tasks may fail."
     }
+elif [ "$VM_DEPLOYMENT" == "true" ]; then
+    echo ""
+    echo "⚠️  Machine registration skipped (skip-machine-registration enabled)"
+    echo "Note: Machines must be registered manually for queue tasks to work."
 else
     echo ""
     echo "VM deployment not enabled, skipping machine registration..."
