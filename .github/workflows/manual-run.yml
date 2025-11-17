@@ -220,7 +220,8 @@ jobs:
         env:
           VM_OS_IMAGE: ${{ github.event.inputs.vm-os-image || 'rediacc-ubuntu-24.04' }}
           TAG: ${{ env.TAG }}
-          DOCKER_REGISTRY: ghcr.io/rediacc/elite
+          # DOCKER_REGISTRY is managed by setup-vms action based on provider
+          # KVM uses local registry (192.168.111.1:5000), cloud providers use ghcr.io
           DOCKER_BRIDGE_IMAGE: ghcr.io/rediacc/elite/bridge:${{ env.TAG }}
           DOCKER_BRIDGE_NETWORK_MODE: host
           DOCKER_BRIDGE_API_URL: http://localhost
