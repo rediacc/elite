@@ -255,7 +255,9 @@ jobs:
         id: tunnel
         uses: rediacc/action-cloudflare-tunnel@v1
         with:
-          url: ${{ github.event.inputs.enable-vms == 'true' && format('http://{0}', steps.vms.outputs.bridge-ip) || 'http://localhost' }}
+          # TODO: Use VM IP when VM deployment is implemented
+          # For now, services always run on localhost (VM deployment is TODO in ci-start.sh)
+          url: http://localhost
           timeout: 30
 
       - name: Display Access Information
