@@ -103,13 +103,10 @@ _run_cli_command() {
 # Helper function to generate machine name from IP
 _generate_machine_name() {
     local ip="$1"
-    local provider="$2"
+    local sequence="$2"
 
-    # Replace dots with dashes for valid machine names
-    local ip_sanitized=$(echo "$ip" | tr '.' '-')
-
-    # Generate name: {provider}-{ip-with-dashes}
-    echo "${provider}-${ip_sanitized}"
+    # Generate clean sequential name for demos: machine-1, machine-2, etc.
+    echo "machine-${sequence}"
 }
 
 # Helper function to extract SSH host key
@@ -305,6 +302,9 @@ SETUP_FAILED_COUNT=0
 # Store machine info for setup queueing
 declare -A REGISTERED_MACHINES
 
+# Machine counter for sequential naming
+MACHINE_SEQUENCE=0
+
 # Register each worker
 for worker_ip in "${WORKER_IP_ARRAY[@]}"; do
     # Trim whitespace
@@ -314,11 +314,14 @@ for worker_ip in "${WORKER_IP_ARRAY[@]}"; do
         continue
     fi
 
+    # Increment sequence for each machine
+    ((MACHINE_SEQUENCE++)) || true
+
     echo ""
     echo "Processing worker: $worker_ip"
 
-    # Generate machine name
-    machine_name=$(_generate_machine_name "$worker_ip" "$PROVIDER")
+    # Generate machine name with sequential number
+    machine_name=$(_generate_machine_name "$worker_ip" "$MACHINE_SEQUENCE")
     echo "  Machine name: $machine_name"
 
     # Extract SSH host key
