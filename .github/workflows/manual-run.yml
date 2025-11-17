@@ -337,62 +337,6 @@ jobs:
           echo "✅ Health Check:"
           ./go health
 
-      - name: Display Access Information
-        run: |
-          echo ""
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "🌍 ACCESS INFORMATION"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo ""
-          echo "🌐 WEB ACCESS:"
-          echo "   • Cloudflare Tunnel: ${{ steps.tunnel.outputs.tunnel-url }}"
-          echo ""
-
-          # Display VM infrastructure details if enabled
-          if [ "${{ github.event.inputs.enable-vms }}" == "true" ]; then
-            echo "🖥️  VM INFRASTRUCTURE:"
-            echo "   • Provider: ${{ github.event.inputs.vm-provider || 'kvm' }}"
-            echo "   • Configuration: ${{ github.event.inputs.vm-configuration || 'Basic' }}"
-            echo "   • Bridge IP: ${{ steps.vms.outputs.bridge-ip }}"
-            echo "   • Worker IPs: ${{ steps.vms.outputs.worker-ips }}"
-            echo ""
-            echo "📍 VM SERVICE URLS:"
-            echo "   • API: http://${{ steps.vms.outputs.bridge-ip }}"
-            echo "   • Web UI: http://${{ steps.vms.outputs.bridge-ip }}"
-            echo "   • Registry: ${{ steps.vms.outputs.registry-url }}"
-            echo ""
-            echo "🔐 SSH ACCESS TO VMS:"
-            echo "   • Bridge:  ssh ubuntu@${{ steps.vms.outputs.bridge-ip }}"
-
-            # Parse and display worker IPs
-            IFS=',' read -ra WORKER_ARRAY <<< "${{ steps.vms.outputs.worker-ips }}"
-            for i in "${!WORKER_ARRAY[@]}"; do
-              echo "   • Worker $((i+1)): ssh ubuntu@${WORKER_ARRAY[$i]}"
-            done
-            echo ""
-          else
-            echo "🐳 LOCAL SERVICES:"
-            echo "   • API: ${{ steps.services.outputs.api-url }}"
-            echo "   • Web UI: http://localhost"
-            echo ""
-          fi
-
-          echo "🗄️  DATABASE:"
-          echo "   • SQL Server: ${{ steps.services.outputs.sql-connection }}"
-          echo ""
-
-          # Display debug access if enabled
-          if [ "${{ github.event.inputs.enable-debug }}" == "true" ]; then
-            echo "🔧 DEBUG ACCESS (Interactive Terminal):"
-            echo "   • SSH:         ${{ steps.tmate.outputs.ssh-connection }}"
-            echo "   • Web:         ${{ steps.tmate.outputs.web-url }}"
-            echo "   • SSH (RO):    ${{ steps.tmate.outputs.ssh-ro-connection }}"
-            echo "   • Web (RO):    ${{ steps.tmate.outputs.web-ro-url }}"
-            echo ""
-          fi
-
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
       - name: Export Deployment Information
         run: |
           # Create comprehensive deployment info JSON
@@ -446,18 +390,70 @@ jobs:
           path: deployment-info.json
           retention-days: 1
 
-      - name: Keep Services Alive
+      - name: Display Access Information and Keep Services Alive
         run: |
-          # Read duration from saved file
+          # Display Access Information
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🌍 ACCESS INFORMATION"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "🌐 WEB ACCESS:"
+          echo "   • Cloudflare Tunnel: ${{ steps.tunnel.outputs.tunnel-url }}"
+          echo ""
+
+          # Display VM infrastructure details if enabled
+          if [ "${{ github.event.inputs.enable-vms }}" == "true" ]; then
+            echo "🖥️  VM INFRASTRUCTURE:"
+            echo "   • Provider: ${{ github.event.inputs.vm-provider || 'kvm' }}"
+            echo "   • Configuration: ${{ github.event.inputs.vm-configuration || 'Basic' }}"
+            echo "   • Bridge IP: ${{ steps.vms.outputs.bridge-ip }}"
+            echo "   • Worker IPs: ${{ steps.vms.outputs.worker-ips }}"
+            echo ""
+            echo "📍 VM SERVICE URLS:"
+            echo "   • API: http://${{ steps.vms.outputs.bridge-ip }}"
+            echo "   • Web UI: http://${{ steps.vms.outputs.bridge-ip }}"
+            echo "   • Registry: ${{ steps.vms.outputs.registry-url }}"
+            echo ""
+            echo "🔐 SSH ACCESS TO VMS:"
+            echo "   • Bridge:  ssh ubuntu@${{ steps.vms.outputs.bridge-ip }}"
+
+            # Parse and display worker IPs
+            IFS=',' read -ra WORKER_ARRAY <<< "${{ steps.vms.outputs.worker-ips }}"
+            for i in "${!WORKER_ARRAY[@]}"; do
+              echo "   • Worker $((i+1)): ssh ubuntu@${WORKER_ARRAY[$i]}"
+            done
+            echo ""
+          else
+            echo "🐳 LOCAL SERVICES:"
+            echo "   • API: ${{ steps.services.outputs.api-url }}"
+            echo "   • Web UI: http://localhost"
+            echo ""
+          fi
+
+          echo "🗄️  DATABASE:"
+          echo "   • SQL Server: ${{ steps.services.outputs.sql-connection }}"
+          echo ""
+
+          # Display debug access if enabled
+          if [ "${{ github.event.inputs.enable-debug }}" == "true" ]; then
+            echo "🔧 DEBUG ACCESS (Interactive Terminal):"
+            echo "   • SSH:         ${{ steps.tmate.outputs.ssh-connection }}"
+            echo "   • Web:         ${{ steps.tmate.outputs.web-url }}"
+            echo "   • SSH (RO):    ${{ steps.tmate.outputs.ssh-ro-connection }}"
+            echo "   • Web (RO):    ${{ steps.tmate.outputs.web-ro-url }}"
+            echo ""
+          fi
+
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+
+          # Keep Services Alive
           DURATION_MIN=$(cat /tmp/duration.txt)
           DURATION_SEC=$((DURATION_MIN * 60))
           END_TIME=$(($(date +%s) + DURATION_SEC))
           CHECK_INTERVAL=300  # Check every 5 minutes
 
-          # Get tunnel URL from action output
-          TUNNEL_URL="${{ steps.tunnel.outputs.tunnel-url }}"
-
-          echo ""
           echo "⏳ Keeping services alive for ${DURATION_MIN} minutes..."
           echo "   Start time: $(date '+%Y-%m-%d %H:%M:%S')"
           echo "   End time:   $(date -d @${END_TIME} '+%Y-%m-%d %H:%M:%S')"
@@ -466,18 +462,15 @@ jobs:
           while [ $(date +%s) -lt ${END_TIME} ]; do
             REMAINING=$(( (END_TIME - $(date +%s)) / 60 ))
 
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "⏱️  Time remaining: ${REMAINING} minutes ($(date '+%H:%M:%S'))"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-            # Run health check
-            if ./go health; then
-              echo "✅ All services healthy"
+            # Run health check quietly
+            if ./go health > /dev/null 2>&1; then
+              echo "⏱️  ${REMAINING} minutes remaining - services healthy"
             else
-              echo "⚠️  Some services may be unhealthy"
+              echo "⏱️  ${REMAINING} minutes remaining - ⚠️  health check failed"
               echo ""
               echo "📋 Container Status:"
               ./go status
+              echo ""
             fi
 
             # Calculate next check or remaining time
@@ -489,12 +482,6 @@ jobs:
             fi
 
             if [ ${SLEEP_TIME} -gt 0 ]; then
-              echo ""
-              if [ ${SLEEP_TIME} -eq ${CHECK_INTERVAL} ]; then
-                echo "💤 Next health check in $((SLEEP_TIME / 60)) minutes..."
-              else
-                echo "💤 Final wait: $((SLEEP_TIME / 60)) minute(s) until end of session..."
-              fi
               sleep ${SLEEP_TIME}
             fi
           done
