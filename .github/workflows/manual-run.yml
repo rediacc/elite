@@ -219,6 +219,13 @@ jobs:
           api-token: ${{ github.event.inputs.vm-provider == 'linode' && secrets.LINODE_API_TOKEN || github.event.inputs.vm-provider == 'vultr' && secrets.VULTR_API_TOKEN || '' }}
         env:
           VM_OS_IMAGE: ${{ github.event.inputs.vm-os-image || 'rediacc-ubuntu-24.04' }}
+          TAG: ${{ env.TAG }}
+          DOCKER_REGISTRY: ghcr.io/rediacc/elite
+          DOCKER_BRIDGE_IMAGE: ghcr.io/rediacc/elite/bridge:${{ env.TAG }}
+          DOCKER_BRIDGE_NETWORK_MODE: host
+          DOCKER_BRIDGE_API_URL: http://localhost
+          SYSTEM_API_URL: http://localhost/api
+          SKIP_MACHINE_REGISTRATION: 'true'
 
       - name: Display VM Information
         if: github.event.inputs.enable-vms == 'true'
