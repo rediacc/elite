@@ -171,6 +171,9 @@ jobs:
           # Source environment for credentials
           source action/ci-env.sh
 
+          # Set API URL explicitly (services run on localhost)
+          export SYSTEM_API_URL="http://localhost/api"
+
           # Login to middleware
           echo "Logging in to middleware..."
           echo "API URL: $SYSTEM_API_URL"
