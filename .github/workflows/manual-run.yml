@@ -101,86 +101,17 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Validate and Set Version
-        run: |
-          VERSION="${{ github.event.inputs.version || 'latest' }}"
-
-          # Validate version format to prevent command injection
-          # Allow only: alphanumeric, dots, hyphens, underscores (standard Docker tag format)
-          if [[ ! "$VERSION" =~ ^[a-zA-Z0-9._-]+$ ]]; then
-            echo "❌ Error: Invalid version format. Only alphanumeric characters, dots, hyphens, and underscores are allowed."
-            echo "   Provided: ${VERSION}"
-            exit 1
-          fi
-
-          # Additional length check (Docker tags max 128 chars)
-          if [ ${#VERSION} -gt 128 ]; then
-            echo "❌ Error: Version tag too long (max 128 characters)"
-            exit 1
-          fi
-
-          echo "Selected version: ${VERSION}"
-
-          # Authenticate to GHCR
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-
-          # Verify the version exists by checking one of the main images
-          if docker manifest inspect "ghcr.io/rediacc/elite/api:${VERSION}" > /dev/null 2>&1; then
-            echo "✅ Version ${VERSION} verified in registry"
-          else
-            echo "⚠️  Warning: Version ${VERSION} not found in registry (continuing anyway)"
-          fi
-
-          # Logout immediately after verification
-          docker logout ghcr.io
-
-          # Export for subsequent steps (safe after validation)
-          echo "TAG=${VERSION}" >> $GITHUB_ENV
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+        run: ./action/ci-validate-version.sh "${{ github.event.inputs.version || 'latest' }}"
 
       - name: Pre-pull Docker Images
-        run: |
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "🔐 Pre-pulling Docker images with temporary authentication..."
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-          # Use a subshell to contain credential exposure
-          (
-            # Set up environment for image resolution
-            export GITHUB_TOKEN="${{ secrets.GITHUB_TOKEN }}"
-            export GITHUB_ACTOR="${{ github.actor }}"
-            export TAG="${{ env.TAG }}"
-
-            # Source configuration to get registry and image names
-            source action/ci-env.sh
-            source .env
-
-            # Authenticate to registry
-            echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-
-            # Pull all required images
-            echo "Pulling web:${TAG}..."
-            docker pull "${DOCKER_REGISTRY}/web:${TAG}"
-
-            echo "Pulling api:${TAG}..."
-            docker pull "${DOCKER_REGISTRY}/api:${TAG}"
-
-            echo "Pulling bridge image..."
-            docker pull "${DOCKER_BRIDGE_IMAGE}"
-
-            echo "✅ All images pulled successfully"
-          )
-
-          # Cleanup credentials completely (outside subshell)
-          echo ""
-          echo "🧹 Removing all Docker credentials..."
-          docker logout ghcr.io
-          rm -f ~/.docker/config.json
-
-          # Clear any cached credentials
-          unset GITHUB_TOKEN
-          unset DOCKER_REGISTRY_PASSWORD
-
-          echo "✅ Credentials cleaned - environment is now safe for debug access"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          TAG: ${{ env.TAG }}
+        run: ./action/ci-pull-images.sh
 
       - name: Provision VMs
         if: github.event.inputs.enable-vms == 'true'
