@@ -42,6 +42,8 @@ services:
       - SYSTEM_DEFAULT_BRIDGE_NAME=${SYSTEM_DEFAULT_BRIDGE_NAME}
       - SYSTEM_DEFAULT_REGION_NAME=${SYSTEM_DEFAULT_REGION_NAME}
       - SYSTEM_DEFAULT_TEAM_NAME=${SYSTEM_DEFAULT_TEAM_NAME}
+      # CI/TEST mode (bypasses email and captcha validation)
+      - CI_MODE=${CI_MODE:-false}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:

@@ -93,6 +93,11 @@ on:
         required: false
         default: false
         type: boolean
+      ci-mode:
+        description: 'Enable CI/TEST mode (bypasses email and captcha validation)'
+        required: false
+        default: true
+        type: boolean
 
   push:
     branches:
@@ -145,6 +150,8 @@ jobs:
           TAG: ${{ env.TAG }}
           # Machine registration will happen later after VMs are provisioned
           SKIP_MACHINE_REGISTRATION: 'true'
+          # CI/TEST mode for testing without email/captcha (defaults to true)
+          CI_MODE: ${{ github.event.inputs.ci-mode != 'false' && 'true' || 'false' }}
 
       - name: Extract SSH Keys from Middleware
         if: github.event.inputs.enable-vms == 'true'
@@ -227,6 +234,7 @@ jobs:
           DOCKER_BRIDGE_API_URL: http://localhost
           SYSTEM_API_URL: http://localhost/api
           SKIP_MACHINE_REGISTRATION: 'true'
+          CI_MODE: ${{ github.event.inputs.ci-mode != 'false' && 'true' || 'false' }}
 
       - name: Display VM Information
         if: github.event.inputs.enable-vms == 'true'
