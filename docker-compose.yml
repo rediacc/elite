@@ -57,7 +57,7 @@ services:
     restart: unless-stopped
 
   sql:
-    image: ${SQL_BASE_IMAGE:-mcr.microsoft.com/mssql/server:2022-CU18-ubuntu-20.04}
+    image: ${SQL_BASE_IMAGE:-mcr.microsoft.com/mssql/server:2022-CU21-ubuntu-22.04}
     container_name: ${INSTANCE_NAME:-rediacc}-sql
     hostname: ${INSTANCE_NAME:-rediacc}-sql
     environment:
