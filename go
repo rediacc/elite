@@ -408,7 +408,7 @@ up() {
         echo "SQL Mode: shared (using rediacc-shared-sql)"
         # Skip SQL image check for shared mode
         local temp_images=(
-            "${DOCKER_REGISTRY}/nginx:${TAG}"
+            "${DOCKER_REGISTRY}/web:${TAG}"
             "${DOCKER_REGISTRY}/api:${TAG}"
             "${DOCKER_BRIDGE_IMAGE}"
         )
@@ -788,9 +788,9 @@ switch() {
         exit 1
     fi
 
-    # Verify version exists in registry for nginx image (as reference)
+    # Verify version exists in registry for web image (as reference)
     echo "Verifying version ${new_version} exists in registry..."
-    local test_image="${DOCKER_REGISTRY}/nginx:${new_version}"
+    local test_image="${DOCKER_REGISTRY}/web:${new_version}"
     if ! docker manifest inspect "$test_image" >/dev/null 2>&1; then
         echo "Error: Version ${new_version} not found in registry"
         echo "Image tested: ${test_image}"
@@ -826,7 +826,7 @@ switch() {
         echo ""
         echo "Pulling new images..."
         # Force pull new images
-        docker pull --quiet "${DOCKER_REGISTRY}/nginx:${new_version}"
+        docker pull --quiet "${DOCKER_REGISTRY}/web:${new_version}"
         docker pull --quiet "${DOCKER_REGISTRY}/api:${new_version}"
         docker pull --quiet "${DOCKER_REGISTRY}/bridge:${new_version}"
 
@@ -970,7 +970,7 @@ help() {
     echo "  ./go version             # Show version information"
     echo "  ./go versions            # List available versions"
     echo "  ./go switch 0.2.1        # Switch to version 0.2.1"
-    echo "  ./go logs nginx          # Show nginx logs"
+    echo "  ./go logs web            # Show web logs"
     echo "  ./go health              # Check if services are healthy"
     echo "  ./go exec api bash       # Open bash in api container"
     echo "  ./go restart api         # Restart api service"
