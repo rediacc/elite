@@ -203,6 +203,156 @@ if [ -n "$CI_REGISTRY_USERNAME" ]; then
     export DOCKER_REGISTRY_PASSWORD="$CI_REGISTRY_PASSWORD"
 fi
 
+# =============================================================================
+# Rollback Configuration
+# =============================================================================
+# These values control the rollback behavior during version switches.
+# All values must be explicitly defined - no defaults are used.
+
+# Timeout in seconds to wait for services to become healthy after switch
+ROLLBACK_HEALTH_CHECK_TIMEOUT=120
+
+# Interval in seconds between health check attempts
+ROLLBACK_HEALTH_CHECK_INTERVAL=5
+
+# File to store the previous version for rollback capability
+ROLLBACK_PREVIOUS_VERSION_FILE=".previous_tag"
+
+# Number of log lines to display from failed container during rollback
+ROLLBACK_LOG_TAIL_LINES=50
+
+# Timeout in seconds for curl health check requests (should be less than interval)
+ROLLBACK_CURL_TIMEOUT=3
+
+# =============================================================================
+
+# Save current TAG to previous version file for rollback capability
+_save_previous_version() {
+    if [ -f ".env" ] && grep -q "^TAG=" .env; then
+        grep "^TAG=" .env | cut -d= -f2 > "$ROLLBACK_PREVIOUS_VERSION_FILE"
+    fi
+}
+
+# Get previous version from previous version file
+_get_previous_version() {
+    if [ -f "$ROLLBACK_PREVIOUS_VERSION_FILE" ]; then
+        cat "$ROLLBACK_PREVIOUS_VERSION_FILE"
+    fi
+}
+
+# Wait for services to become healthy after switch
+_wait_for_health() {
+    local elapsed=0
+    local api_container="${INSTANCE_NAME:-rediacc}-api"
+
+    echo "Waiting for services to become healthy (timeout: ${ROLLBACK_HEALTH_CHECK_TIMEOUT}s)..."
+
+    while [ $elapsed -lt $ROLLBACK_HEALTH_CHECK_TIMEOUT ]; do
+        # Check if API container is running using Docker's filter with exact name match
+        if ! docker ps --filter "name=${api_container}" --filter "status=running" --format '{{.Names}}' | grep -q "^${api_container}$"; then
+            echo "  API container not running yet..."
+            sleep $ROLLBACK_HEALTH_CHECK_INTERVAL
+            elapsed=$((elapsed + ROLLBACK_HEALTH_CHECK_INTERVAL))
+            echo "  Waiting... (${elapsed}s/${ROLLBACK_HEALTH_CHECK_TIMEOUT}s)"
+            continue
+        fi
+
+        # Check API health using Docker's health check status
+        # The API container has a healthcheck defined in its Dockerfile
+        local health_status
+        health_status=$(docker inspect "${api_container}" --format='{{.State.Health.Status}}' 2>/dev/null)
+
+        if [ "$health_status" = "healthy" ]; then
+            echo "✓ Services are healthy"
+            return 0
+        elif [ "$health_status" = "unhealthy" ]; then
+            echo "  API container is unhealthy, waiting..."
+        elif [ "$health_status" = "starting" ]; then
+            echo "  Health check starting..."
+        elif [ -z "$health_status" ] || [ "$health_status" = "none" ]; then
+            # Health check not yet initialized or not defined
+            # In standalone mode, ports are exposed to localhost - try HTTP check
+            if [ -z "$INSTANCE_NAME" ]; then
+                # Use --max-time to prevent curl from hanging if API is unresponsive
+                if curl -sf --max-time $ROLLBACK_CURL_TIMEOUT "http://localhost/api/health" 2>/dev/null | grep -q '"status":"healthy"'; then
+                    echo "✓ Services are healthy"
+                    return 0
+                else
+                    echo "  Waiting for health check to initialize..."
+                fi
+            else
+                # Cloud mode - wait for Docker health check to initialize
+                # The API container has a healthcheck defined, so we should wait for it
+                echo "  Waiting for health check to initialize..."
+            fi
+        fi
+
+        sleep $ROLLBACK_HEALTH_CHECK_INTERVAL
+        elapsed=$((elapsed + ROLLBACK_HEALTH_CHECK_INTERVAL))
+        echo "  Waiting... (${elapsed}s/${ROLLBACK_HEALTH_CHECK_TIMEOUT}s)"
+    done
+
+    echo "Error: Health check timed out after ${ROLLBACK_HEALTH_CHECK_TIMEOUT}s"
+    return 1
+}
+
+# Perform rollback to previous version
+_perform_rollback() {
+    local previous_version="$1"
+
+    echo ""
+    echo "⚠ Rolling back to version ${previous_version}..."
+
+    # Capture logs from failed container before rollback
+    local api_container="${INSTANCE_NAME:-rediacc}-api"
+    echo ""
+    echo "=== Error logs from failed API container ==="
+    # Check if container exists before trying to get logs
+    if docker ps -a --filter "name=${api_container}" --format '{{.Names}}' | grep -q "^${api_container}$"; then
+        docker logs --tail $ROLLBACK_LOG_TAIL_LINES "$api_container" 2>&1 || true
+    else
+        echo "(Container not found)"
+    fi
+    echo "============================================="
+    echo ""
+
+    # Restore previous TAG
+    sed "s/^TAG=.*/TAG=${previous_version}/" .env > .env.tmp && mv .env.tmp .env
+    export TAG="$previous_version"
+
+    # Re-source .env to recompute DOCKER_BRIDGE_IMAGE with previous TAG
+    set -a
+    source .env
+    set +a
+
+    # Pull previous version images
+    echo "Pulling previous version images..."
+    if ! docker pull --quiet "${DOCKER_REGISTRY}/web:${previous_version}"; then
+        echo "Warning: Failed to pull web image, it may already be available locally"
+    fi
+    if ! docker pull --quiet "${DOCKER_REGISTRY}/api:${previous_version}"; then
+        echo "Warning: Failed to pull api image, it may already be available locally"
+    fi
+    if ! docker pull --quiet "${DOCKER_REGISTRY}/bridge:${previous_version}"; then
+        echo "Warning: Failed to pull bridge image, it may already be available locally"
+    fi
+
+    # Restart with previous version
+    echo "Restarting services with previous version..."
+    up
+
+    # Verify rollback succeeded
+    if _wait_for_health; then
+        echo ""
+        echo "✓ Rollback to version ${previous_version} successful"
+        return 0
+    else
+        echo ""
+        echo "✗ Rollback failed - manual intervention required"
+        return 1
+    fi
+}
+
 # Function to check and login to Docker registry if needed
 _ensure_registry_login() {
     # Skip if DOCKER_REGISTRY is not set
@@ -758,15 +908,25 @@ versions() {
 
 # Function to switch to a different version
 switch() {
-    local new_version="$1"
+    local new_version=""
+    local no_rollback=false
+
+    # Parse arguments
+    for arg in "$@"; do
+        case "$arg" in
+            --no-rollback) no_rollback=true ;;
+            *) new_version="$arg" ;;
+        esac
+    done
 
     # Check if version parameter is provided
     if [ -z "$new_version" ]; then
         echo "Error: Version parameter required"
-        echo "Usage: ./go switch <version>"
+        echo "Usage: ./go switch <version> [--no-rollback]"
         echo "Examples:"
         echo "  ./go switch 0.2.1"
         echo "  ./go switch 0.2.0"
+        echo "  ./go switch 0.2.1 --no-rollback"
         exit 1
     fi
 
@@ -804,6 +964,10 @@ switch() {
         exit 1
     fi
 
+    # Save current version for potential rollback
+    _save_previous_version
+    local previous_version=$(_get_previous_version)
+
     echo "Updating .env with new version..."
     # Use a temporary file for atomic update
     if grep -q "^TAG=" .env; then
@@ -833,6 +997,27 @@ switch() {
         echo ""
         echo "Restarting services with new version..."
         up
+
+        # Health check with automatic rollback
+        if ! _wait_for_health; then
+            if [ "$no_rollback" = true ]; then
+                echo ""
+                echo "✗ Switch to ${new_version} failed (rollback disabled)"
+                echo "Use './go rollback' to manually rollback to ${previous_version}"
+                exit 1
+            fi
+
+            if [ -n "$previous_version" ]; then
+                _perform_rollback "$previous_version"
+                exit 1
+            else
+                echo ""
+                echo "✗ Switch to ${new_version} failed"
+                echo "No previous version available for rollback"
+                exit 1
+            fi
+        fi
+
         echo ""
         echo "✓ Successfully switched to version ${new_version}"
     else
@@ -840,6 +1025,36 @@ switch() {
         echo "✓ Version updated to ${new_version}"
         echo "Run './go up' to start services with the new version"
     fi
+}
+
+# Function to rollback to previous version
+rollback() {
+    local previous_version=$(_get_previous_version)
+
+    if [ -z "$previous_version" ]; then
+        echo "Error: No previous version found"
+        echo "The rollback command requires a previous switch operation"
+        echo ""
+        echo "Previous version file not found: ${ROLLBACK_PREVIOUS_VERSION_FILE}"
+        exit 1
+    fi
+
+    local current_version=""
+    if [ -f ".env" ] && grep -q "^TAG=" .env; then
+        current_version=$(grep "^TAG=" .env | cut -d= -f2)
+    fi
+
+    echo "Current version: ${current_version}"
+    echo "Rolling back to: ${previous_version}"
+    echo ""
+    read -p "Continue? [y/N] " confirm
+
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        echo "Rollback cancelled"
+        exit 0
+    fi
+
+    _perform_rollback "$previous_version"
 }
 
 # Function to generate SSL/TLS certificates
@@ -954,7 +1169,8 @@ help() {
     echo "  health     - Check service health"
     echo "  version    - Show current version information"
     echo "  versions   - List available versions from registry"
-    echo "  switch     - Switch to a different version"
+    echo "  switch     - Switch to a different version (with auto-rollback)"
+    echo "  rollback   - Rollback to previous version"
     echo "  build      - Build/rebuild services"
     echo "  exec       - Execute command in a container"
     echo "  restart    - Restart services"
@@ -970,6 +1186,8 @@ help() {
     echo "  ./go version             # Show version information"
     echo "  ./go versions            # List available versions"
     echo "  ./go switch 0.2.1        # Switch to version 0.2.1"
+    echo "  ./go switch 0.2.1 --no-rollback  # Switch without auto-rollback"
+    echo "  ./go rollback            # Rollback to previous version"
     echo "  ./go logs web            # Show web logs"
     echo "  ./go health              # Check if services are healthy"
     echo "  ./go exec api bash       # Open bash in api container"
@@ -1015,6 +1233,10 @@ case "$1" in
     switch)
         shift
         switch "$@"
+        ;;
+    rollback)
+        shift
+        rollback "$@"
         ;;
     build)
         shift
