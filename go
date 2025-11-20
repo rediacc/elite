@@ -464,22 +464,32 @@ cleanup_bridge_containers() {
         return 0
     fi
 
-    # Remove each container
-    local removed_count=0
+    # Gracefully stop each container (send SIGTERM, wait for task completion)
+    local stopped_count=0
+    local container_ids=""
     while IFS=$'\t' read -r container_id container_name; do
         if [ -n "$container_id" ]; then
-            echo "  Removing container: $container_name ($container_id)"
-            docker rm -f "$container_id" >/dev/null 2>&1
+            echo "  Stopping container: $container_name ($container_id)"
+            # Send SIGTERM and wait up to 60 seconds for graceful shutdown
+            docker stop -t 60 "$container_id" >/dev/null 2>&1
             if [ $? -eq 0 ]; then
-                ((removed_count++))
+                ((stopped_count++))
+                container_ids="$container_ids $container_id"
             else
-                echo "  Warning: Failed to remove container $container_name"
+                echo "  Warning: Failed to stop container $container_name"
             fi
         fi
     done <<< "$all_containers"
 
-    if [ $removed_count -gt 0 ]; then
-        echo "✓ Removed $removed_count bridge container(s) for company: $SYSTEM_COMPANY_NAME"
+    # Remove stopped containers
+    if [ -n "$container_ids" ]; then
+        for container_id in $container_ids; do
+            docker rm "$container_id" >/dev/null 2>&1
+        done
+    fi
+
+    if [ $stopped_count -gt 0 ]; then
+        echo "✓ Gracefully stopped and removed $stopped_count bridge container(s) for company: $SYSTEM_COMPANY_NAME"
     fi
 }
 
@@ -987,6 +997,32 @@ switch() {
 
     # Check if services are running
     if docker ps --format '{{.Names}}' | grep -q "${INSTANCE_NAME:-rediacc}-"; then
+        echo ""
+        echo "Running pre-upgrade cleanup for orphaned tasks..."
+        # Run cleanup procedure to handle any in-flight tasks before stopping bridges
+        local sql_container="${INSTANCE_NAME:-rediacc}-sql"
+        if docker ps --format '{{.Names}}' | grep -q "^${sql_container}$"; then
+            # Source secrets to get database password
+            if [ -f ".env.secret" ]; then
+                set -a
+                source .env.secret
+                set +a
+            fi
+
+            # Execute cleanup procedure
+            if docker exec "$sql_container" /opt/mssql-tools18/bin/sqlcmd \
+                -S localhost -U sa -P "${MSSQL_SA_PASSWORD}" \
+                -d "${REDIACC_DATABASE_NAME:-RediaccMiddleware}" \
+                -Q "SET QUOTED_IDENTIFIER ON; EXEC [web].[internal_CleanupOrphanedTasks]" \
+                -C -W 2>/dev/null; then
+                echo "✓ Pre-upgrade cleanup completed"
+            else
+                echo "⚠ Pre-upgrade cleanup skipped (procedure may not exist yet)"
+            fi
+        else
+            echo "⚠ SQL container not running, skipping pre-upgrade cleanup"
+        fi
+
         echo ""
         echo "Pulling new images..."
         # Force pull new images
