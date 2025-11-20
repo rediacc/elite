@@ -66,6 +66,7 @@ services:
       - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD}
     volumes:
       - ${INSTANCE_DATA_PATH:-./}/mssql:/var/opt/mssql
+      - ./scripts/mssql.conf:/var/opt/mssql/mssql.conf
     networks:
       intranet:
         aliases:

@@ -495,10 +495,23 @@ cleanup_bridge_containers() {
 
 # Function to start services
 up() {
+    local keep_bridges=false
+
+    # Parse arguments
+    for arg in "$@"; do
+        case "$arg" in
+            --keep-bridges) keep_bridges=true ;;
+        esac
+    done
+
     echo "Starting elite core services..."
 
-    # Cleanup bridge containers before starting services
-    cleanup_bridge_containers
+    # Cleanup bridge containers before starting services (unless --keep-bridges)
+    if [ "$keep_bridges" = true ]; then
+        echo "Keeping existing bridge containers (--keep-bridges flag)"
+    else
+        cleanup_bridge_containers
+    fi
 
     # Auto-generate SSL/TLS certificates if HTTPS is enabled and certs don't exist
     # Only in standalone mode (when INSTANCE_NAME is not set)

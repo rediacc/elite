@@ -6,8 +6,9 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ELITE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# Preserve TAG from environment (set by workflow) if present
+# Preserve environment variables from workflow before sourcing .env
 WORKFLOW_TAG="${TAG}"
+WORKFLOW_CI_MODE="${CI_MODE}"
 
 # Check if .env file exists, create from template if missing
 if [ ! -f "$ELITE_DIR/.env" ]; then
@@ -28,9 +29,13 @@ if [ -f "$ELITE_DIR/.env" ]; then
     set +a  # stop auto-exporting
 fi
 
-# Restore workflow TAG if it was set (takes precedence over .env)
+# Restore workflow variables if they were set (take precedence over .env)
 if [ -n "$WORKFLOW_TAG" ]; then
     TAG="$WORKFLOW_TAG"
+fi
+if [ -n "$WORKFLOW_CI_MODE" ]; then
+    CI_MODE="$WORKFLOW_CI_MODE"
+    export CI_MODE
 fi
 
 # Function to generate secure password
