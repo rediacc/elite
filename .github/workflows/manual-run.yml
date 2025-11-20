@@ -372,9 +372,11 @@ jobs:
               "bridge_ip": "${{ steps.vms.outputs.bridge-ip || null }}",
               "worker_ips": $(echo '${{ steps.vms.outputs.worker-ips }}' | jq -R 'if . == "" then null else split(",") end'),
               "registry_url": "${{ steps.vms.outputs.registry-url || null }}",
+              "machine_user": "${{ steps.vms.outputs.machine-user || null }}",
+              "machine_password": "${{ steps.vms.outputs.machine-password || null }}",
               "ssh_access": {
-                "bridge": $(if [ "${{ github.event.inputs.enable-vms }}" == "true" ]; then echo "\"ssh ubuntu@${{ steps.vms.outputs.bridge-ip }}\""; else echo "null"; fi),
-                "workers": $(if [ "${{ github.event.inputs.enable-vms }}" == "true" ]; then echo '${{ steps.vms.outputs.worker-ips }}' | jq -R 'if . == "" then null else split(",") | map("ssh ubuntu@" + .) end'; else echo "null"; fi)
+                "bridge": $(if [ "${{ github.event.inputs.enable-vms }}" == "true" ]; then echo "\"ssh ${{ steps.vms.outputs.machine-user }}@${{ steps.vms.outputs.bridge-ip }}\""; else echo "null"; fi),
+                "workers": $(if [ "${{ github.event.inputs.enable-vms }}" == "true" ]; then echo '${{ steps.vms.outputs.worker-ips }}' | jq -R --arg user "${{ steps.vms.outputs.machine-user }}" 'if . == "" then null else split(",") | map("ssh " + $user + "@" + .) end'; else echo "null"; fi)
               }
             },
             "debug": {
@@ -423,13 +425,17 @@ jobs:
             echo "   • Web UI: http://${{ steps.vms.outputs.bridge-ip }}"
             echo "   • Registry: ${{ steps.vms.outputs.registry-url }}"
             echo ""
-            echo "🔐 SSH ACCESS TO VMS:"
-            echo "   • Bridge:  ssh ubuntu@${{ steps.vms.outputs.bridge-ip }}"
+            echo "🔐 VM CREDENTIALS:"
+            echo "   • Username: ${{ steps.vms.outputs.machine-user }}"
+            echo "   • Password: ${{ steps.vms.outputs.machine-password }}"
+            echo ""
+            echo "🔑 SSH ACCESS TO VMS:"
+            echo "   • Bridge:  ssh ${{ steps.vms.outputs.machine-user }}@${{ steps.vms.outputs.bridge-ip }}"
 
             # Parse and display worker IPs
             IFS=',' read -ra WORKER_ARRAY <<< "${{ steps.vms.outputs.worker-ips }}"
             for i in "${!WORKER_ARRAY[@]}"; do
-              echo "   • Worker $((i+1)): ssh ubuntu@${WORKER_ARRAY[$i]}"
+              echo "   • Worker $((i+1)): ssh ${{ steps.vms.outputs.machine-user }}@${WORKER_ARRAY[$i]}"
             done
             echo ""
           else
