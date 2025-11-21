@@ -10,6 +10,10 @@ ELITE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 WORKFLOW_TAG="${TAG}"
 WORKFLOW_CI_MODE="${CI_MODE}"
 
+# Debug: Show incoming CI_MODE from workflow
+echo "[ci-env.sh] Incoming CI_MODE from workflow: '${CI_MODE}'"
+echo "[ci-env.sh] Preserved as WORKFLOW_CI_MODE: '${WORKFLOW_CI_MODE}'"
+
 # Check if .env file exists, create from template if missing
 if [ ! -f "$ELITE_DIR/.env" ]; then
     if [ -f "$ELITE_DIR/.env.template" ]; then
@@ -36,6 +40,9 @@ fi
 if [ -n "$WORKFLOW_CI_MODE" ]; then
     CI_MODE="$WORKFLOW_CI_MODE"
     export CI_MODE
+    echo "[ci-env.sh] Restored CI_MODE to: '${CI_MODE}'"
+else
+    echo "[ci-env.sh] WARNING: WORKFLOW_CI_MODE was empty, CI_MODE remains: '${CI_MODE}'"
 fi
 
 # Function to generate secure password

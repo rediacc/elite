@@ -183,6 +183,9 @@ CI_WORKFLOW_TAG="${TAG}"
 CI_BRIDGE_NETWORK_MODE="${DOCKER_BRIDGE_NETWORK_MODE}"
 CI_BRIDGE_API_URL="${DOCKER_BRIDGE_API_URL}"
 
+# Debug: Show preserved values
+echo "[go] Preserved CI_WORKFLOW_MODE: '${CI_WORKFLOW_MODE}'"
+
 # Source environment files and export for docker compose
 set -a  # automatically export all variables
 
@@ -218,6 +221,9 @@ fi
 if [ -n "$CI_BRIDGE_API_URL" ]; then
     export DOCKER_BRIDGE_API_URL="$CI_BRIDGE_API_URL"
 fi
+
+# Debug: Show final CI_MODE value
+echo "[go] Final CI_MODE after restoration: '${CI_MODE}'"
 
 # =============================================================================
 # Rollback Configuration
