@@ -174,10 +174,14 @@ EOF
     echo -e "\e[31mIMPORTANT: Keep .env.secret secure and never commit it to git!\e[0m"
 fi
 
-# Preserve Docker registry credentials from CI environment before sourcing .env
-# (ci-env.sh sets these from GITHUB_TOKEN in GitHub Actions)
+# Preserve CI environment variables before sourcing .env
+# (ci-env.sh sets these for GitHub Actions - don't let .env override them)
 CI_REGISTRY_USERNAME="${DOCKER_REGISTRY_USERNAME}"
 CI_REGISTRY_PASSWORD="${DOCKER_REGISTRY_PASSWORD}"
+CI_WORKFLOW_MODE="${CI_MODE}"
+CI_WORKFLOW_TAG="${TAG}"
+CI_BRIDGE_NETWORK_MODE="${DOCKER_BRIDGE_NETWORK_MODE}"
+CI_BRIDGE_API_URL="${DOCKER_BRIDGE_API_URL}"
 
 # Source environment files and export for docker compose
 set -a  # automatically export all variables
@@ -197,10 +201,22 @@ fi
 
 set +a  # stop auto-exporting
 
-# Restore CI credentials if they were set (don't let .env override them)
+# Restore CI environment variables if they were set (don't let .env override them)
 if [ -n "$CI_REGISTRY_USERNAME" ]; then
     export DOCKER_REGISTRY_USERNAME="$CI_REGISTRY_USERNAME"
     export DOCKER_REGISTRY_PASSWORD="$CI_REGISTRY_PASSWORD"
+fi
+if [ -n "$CI_WORKFLOW_MODE" ]; then
+    export CI_MODE="$CI_WORKFLOW_MODE"
+fi
+if [ -n "$CI_WORKFLOW_TAG" ]; then
+    export TAG="$CI_WORKFLOW_TAG"
+fi
+if [ -n "$CI_BRIDGE_NETWORK_MODE" ]; then
+    export DOCKER_BRIDGE_NETWORK_MODE="$CI_BRIDGE_NETWORK_MODE"
+fi
+if [ -n "$CI_BRIDGE_API_URL" ]; then
+    export DOCKER_BRIDGE_API_URL="$CI_BRIDGE_API_URL"
 fi
 
 # =============================================================================
