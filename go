@@ -539,17 +539,25 @@ up() {
             echo ""
 
             # Source environment to get SYSTEM_DOMAIN and SSL_EXTRA_DOMAINS
-            # Preserve CI variables before sourcing
+            # Preserve CI variables before sourcing (don't let .env override them)
             local saved_ci_mode="${CI_MODE}"
+            local saved_tag="${TAG}"
+            local saved_bridge_network_mode="${DOCKER_BRIDGE_NETWORK_MODE}"
+            local saved_bridge_api_url="${DOCKER_BRIDGE_API_URL}"
+            local saved_registry_username="${DOCKER_REGISTRY_USERNAME}"
+            local saved_registry_password="${DOCKER_REGISTRY_PASSWORD}"
             set -a
             if [ -f ".env" ]; then
                 source .env
             fi
             set +a
             # Restore CI variables
-            if [ -n "$saved_ci_mode" ]; then
-                export CI_MODE="$saved_ci_mode"
-            fi
+            [ -n "$saved_ci_mode" ] && export CI_MODE="$saved_ci_mode"
+            [ -n "$saved_tag" ] && export TAG="$saved_tag"
+            [ -n "$saved_bridge_network_mode" ] && export DOCKER_BRIDGE_NETWORK_MODE="$saved_bridge_network_mode"
+            [ -n "$saved_bridge_api_url" ] && export DOCKER_BRIDGE_API_URL="$saved_bridge_api_url"
+            [ -n "$saved_registry_username" ] && export DOCKER_REGISTRY_USERNAME="$saved_registry_username"
+            [ -n "$saved_registry_password" ] && export DOCKER_REGISTRY_PASSWORD="$saved_registry_password"
 
             # Export variables for cert generation
             export SYSTEM_DOMAIN="${SYSTEM_DOMAIN:-localhost}"
