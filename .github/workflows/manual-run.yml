@@ -1,10 +1,10 @@
-name: Manual Service Run
+name: Service Run
 
-run-name: "${{ github.event.inputs.run-name || 'Manual Service Run' }}"
+run-name: "${{ github.event.inputs.run-name || (github.event_name == 'workflow_dispatch' && 'Manual Service Run') || (github.event_name == 'push' && 'CI Service Run') || 'Scheduled Service Run' }}"
 
 # Run services for a specified duration
-# - Manual: workflow_dispatch with custom duration
-# - Automatic: on push and daily schedule (5 minutes)
+# - Manual: workflow_dispatch with custom parameters
+# - Automatic: on push and daily schedule (uses same defaults as manual)
 on:
   workflow_dispatch:
     inputs:
@@ -113,6 +113,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 420  # 7 hours max (including VM provisioning time)
 
+    # Consolidated defaults - these match the workflow_dispatch input defaults
+    env:
+      DEFAULT_DURATION: '30'
+      DEFAULT_VM_CONFIGURATION: 'Standard'
+      DEFAULT_VM_PROVIDER: 'kvm'
+      DEFAULT_VM_OS_IMAGE: 'rediacc-ubuntu-24.04'
+      DEFAULT_ENABLE_VMS: 'true'
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -154,7 +162,7 @@ jobs:
           CI_MODE: ${{ github.event.inputs.ci-mode != 'false' && 'true' || 'false' }}
 
       - name: Extract SSH Keys from Middleware
-        if: github.event.inputs.enable-vms == 'true'
+        if: (github.event.inputs.enable-vms || env.DEFAULT_ENABLE_VMS) == 'true'
         env:
           TAG: ${{ env.TAG }}
         run: |
@@ -216,16 +224,16 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
       - name: Provision VMs
-        if: github.event.inputs.enable-vms == 'true'
+        if: (github.event.inputs.enable-vms || env.DEFAULT_ENABLE_VMS) == 'true'
         id: vms
         uses: rediacc/ops/.github/actions/setup-vms@main
         with:
-          provider: ${{ github.event.inputs.vm-provider || 'kvm' }}
-          configuration: ${{ github.event.inputs.vm-configuration || 'Basic' }}
-          duration: ${{ github.event.inputs.duration }}
+          provider: ${{ github.event.inputs.vm-provider || env.DEFAULT_VM_PROVIDER }}
+          configuration: ${{ github.event.inputs.vm-configuration || env.DEFAULT_VM_CONFIGURATION }}
+          duration: ${{ github.event.inputs.duration || env.DEFAULT_DURATION }}
           api-token: ${{ github.event.inputs.vm-provider == 'linode' && secrets.LINODE_API_TOKEN || github.event.inputs.vm-provider == 'vultr' && secrets.VULTR_API_TOKEN || '' }}
         env:
-          VM_OS_IMAGE: ${{ github.event.inputs.vm-os-image || 'rediacc-ubuntu-24.04' }}
+          VM_OS_IMAGE: ${{ github.event.inputs.vm-os-image || env.DEFAULT_VM_OS_IMAGE }}
           TAG: ${{ env.TAG }}
           # DOCKER_REGISTRY is managed by setup-vms action based on provider
           # KVM uses local registry (192.168.111.1:5000), cloud providers use ghcr.io
@@ -237,16 +245,16 @@ jobs:
           CI_MODE: ${{ github.event.inputs.ci-mode != 'false' && 'true' || 'false' }}
 
       - name: Display VM Information
-        if: github.event.inputs.enable-vms == 'true'
+        if: (github.event.inputs.enable-vms || env.DEFAULT_ENABLE_VMS) == 'true'
         run: |
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "🖥️  VM Infrastructure Provisioned"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo ""
           echo "📦 VM CONFIGURATION:"
-          echo "   • Provider: ${{ github.event.inputs.vm-provider || 'kvm' }}"
-          echo "   • Configuration: ${{ github.event.inputs.vm-configuration || 'Basic' }}"
-          echo "   • OS Image: ${{ github.event.inputs.vm-os-image || 'rediacc-ubuntu-24.04' }}"
+          echo "   • Provider: ${{ github.event.inputs.vm-provider || env.DEFAULT_VM_PROVIDER }}"
+          echo "   • Configuration: ${{ github.event.inputs.vm-configuration || env.DEFAULT_VM_CONFIGURATION }}"
+          echo "   • OS Image: ${{ github.event.inputs.vm-os-image || env.DEFAULT_VM_OS_IMAGE }}"
           echo "   • Status: ${{ steps.vms.outputs.status }}"
           echo ""
           echo "🌐 VM ACCESS:"
@@ -259,7 +267,7 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
       - name: Register Worker Machines
-        if: github.event.inputs.enable-vms == 'true' && github.event.inputs.skip-machine-registration != 'true'
+        if: (github.event.inputs.enable-vms || env.DEFAULT_ENABLE_VMS) == 'true' && github.event.inputs.skip-machine-registration != 'true'
         run: |
           source action/ci-env.sh
 
@@ -274,13 +282,14 @@ jobs:
 
       - name: Display Service Information
         run: |
-          # Set duration: use input if available (manual run), otherwise 5 minutes (auto run)
-          DURATION="${{ github.event.inputs.duration }}"
-          if [ -z "$DURATION" ]; then
-            DURATION="5"
-            TRIGGER_TYPE="Automatic (Push/Schedule)"
-          else
+          # Set duration: use input if available, otherwise use consolidated default
+          DURATION="${{ github.event.inputs.duration || env.DEFAULT_DURATION }}"
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             TRIGGER_TYPE="Manual"
+          elif [ "${{ github.event_name }}" == "push" ]; then
+            TRIGGER_TYPE="Automatic (Push)"
+          else
+            TRIGGER_TYPE="Automatic (Schedule)"
           fi
 
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -292,10 +301,10 @@ jobs:
           echo ""
           
           # Display deployment-specific information
-          if [ "${{ github.event.inputs.enable-vms }}" == "true" ]; then
+          if [ "${{ github.event.inputs.enable-vms || env.DEFAULT_ENABLE_VMS }}" == "true" ]; then
             echo "🖥️  DEPLOYMENT: VM Infrastructure"
-            echo "   • Provider: ${{ github.event.inputs.vm-provider || 'kvm' }}"
-            echo "   • Configuration: ${{ github.event.inputs.vm-configuration || 'Basic' }}"
+            echo "   • Provider: ${{ github.event.inputs.vm-provider || env.DEFAULT_VM_PROVIDER }}"
+            echo "   • Configuration: ${{ github.event.inputs.vm-configuration || env.DEFAULT_VM_CONFIGURATION }}"
             echo "   • Bridge IP: ${{ steps.vms.outputs.bridge-ip }}"
             echo "   • Worker IPs: ${{ steps.vms.outputs.worker-ips }}"
             echo "   • VM Registry: ${{ steps.vms.outputs.registry-url }}"
@@ -352,7 +361,7 @@ jobs:
           {
             "metadata": {
               "run_id": "${{ github.run_id }}",
-              "duration_minutes": ${{ github.event.inputs.duration || 5 }},
+              "duration_minutes": ${{ github.event.inputs.duration || env.DEFAULT_DURATION }},
               "version": "${{ env.TAG }}",
               "triggered_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
               "workflow_url": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
@@ -366,17 +375,17 @@ jobs:
               "connection_string": "Server=sql,1433;Database=RediaccMiddleware;User Id=rediacc;TrustServerCertificate=True"
             },
             "vms": {
-              "enabled": ${{ github.event.inputs.enable-vms == 'true' }},
-              "provider": "${{ github.event.inputs.vm-provider || null }}",
-              "configuration": "${{ github.event.inputs.vm-configuration || null }}",
+              "enabled": ${{ (github.event.inputs.enable-vms || env.DEFAULT_ENABLE_VMS) == 'true' }},
+              "provider": "${{ github.event.inputs.vm-provider || env.DEFAULT_VM_PROVIDER }}",
+              "configuration": "${{ github.event.inputs.vm-configuration || env.DEFAULT_VM_CONFIGURATION }}",
               "bridge_ip": "${{ steps.vms.outputs.bridge-ip || null }}",
               "worker_ips": $(echo '${{ steps.vms.outputs.worker-ips }}' | jq -R 'if . == "" then null else split(",") end'),
               "registry_url": "${{ steps.vms.outputs.registry-url || null }}",
               "machine_user": "${{ steps.vms.outputs.machine-user || null }}",
               "machine_password": "${{ steps.vms.outputs.machine-password || null }}",
               "ssh_access": {
-                "bridge": $(if [ "${{ github.event.inputs.enable-vms }}" == "true" ]; then echo "\"ssh ${{ steps.vms.outputs.machine-user }}@${{ steps.vms.outputs.bridge-ip }}\""; else echo "null"; fi),
-                "workers": $(if [ "${{ github.event.inputs.enable-vms }}" == "true" ]; then echo '${{ steps.vms.outputs.worker-ips }}' | jq -R --arg user "${{ steps.vms.outputs.machine-user }}" 'if . == "" then null else split(",") | map("ssh " + $user + "@" + .) end'; else echo "null"; fi)
+                "bridge": $(if [ "${{ github.event.inputs.enable-vms || env.DEFAULT_ENABLE_VMS }}" == "true" ]; then echo "\"ssh ${{ steps.vms.outputs.machine-user }}@${{ steps.vms.outputs.bridge-ip }}\""; else echo "null"; fi),
+                "workers": $(if [ "${{ github.event.inputs.enable-vms || env.DEFAULT_ENABLE_VMS }}" == "true" ]; then echo '${{ steps.vms.outputs.worker-ips }}' | jq -R --arg user "${{ steps.vms.outputs.machine-user }}" 'if . == "" then null else split(",") | map("ssh " + $user + "@" + .) end'; else echo "null"; fi)
               }
             },
             "debug": {
@@ -413,10 +422,10 @@ jobs:
           echo ""
 
           # Display VM infrastructure details if enabled
-          if [ "${{ github.event.inputs.enable-vms }}" == "true" ]; then
+          if [ "${{ github.event.inputs.enable-vms || env.DEFAULT_ENABLE_VMS }}" == "true" ]; then
             echo "🖥️  VM INFRASTRUCTURE:"
-            echo "   • Provider: ${{ github.event.inputs.vm-provider || 'kvm' }}"
-            echo "   • Configuration: ${{ github.event.inputs.vm-configuration || 'Basic' }}"
+            echo "   • Provider: ${{ github.event.inputs.vm-provider || env.DEFAULT_VM_PROVIDER }}"
+            echo "   • Configuration: ${{ github.event.inputs.vm-configuration || env.DEFAULT_VM_CONFIGURATION }}"
             echo "   • Bridge IP: ${{ steps.vms.outputs.bridge-ip }}"
             echo "   • Worker IPs: ${{ steps.vms.outputs.worker-ips }}"
             echo ""
@@ -548,8 +557,8 @@ jobs:
       - name: Summary
         if: always()
         run: |
-          # Get duration from input (or default to 5 if not set)
-          DURATION_MIN="${{ github.event.inputs.duration || '5' }}"
+          # Get duration from input or use consolidated default
+          DURATION_MIN="${{ github.event.inputs.duration || env.DEFAULT_DURATION }}"
 
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -563,8 +572,12 @@ jobs:
   cleanup-vms:
     name: Cleanup VM Infrastructure
     needs: [run-services]
-    if: always() && github.event.inputs.enable-vms == 'true'
+    if: always() && (github.event.inputs.enable-vms == 'true' || (github.event.inputs.enable-vms == '' && true))
     runs-on: ubuntu-latest
+
+    # Need to redefine defaults here since job-level env from run-services isn't accessible
+    env:
+      DEFAULT_VM_PROVIDER: 'kvm'
 
     steps:
       - name: Checkout SDK Repository
@@ -576,4 +589,4 @@ jobs:
       - name: Cleanup VMs
         uses: ./.github/actions/cleanup-vms
         with:
-          provider: ${{ github.event.inputs.vm-provider || 'kvm' }}
+          provider: ${{ github.event.inputs.vm-provider || env.DEFAULT_VM_PROVIDER }}
