@@ -154,12 +154,11 @@ jobs:
         uses: ./action
         with:
           keep-alive: true  # Don't auto-cleanup, we'll handle it manually
+          ci-mode: ${{ github.event.inputs.ci-mode != 'false' && 'true' || 'false' }}
         env:
           TAG: ${{ env.TAG }}
           # Machine registration will happen later after VMs are provisioned
           SKIP_MACHINE_REGISTRATION: 'true'
-          # CI/TEST mode for testing without email/captcha (defaults to true)
-          CI_MODE: ${{ github.event.inputs.ci-mode != 'false' && 'true' || 'false' }}
 
       - name: Extract SSH Keys from Middleware
         if: (github.event.inputs.enable-vms || env.DEFAULT_ENABLE_VMS) == 'true'

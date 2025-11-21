@@ -11,6 +11,10 @@ inputs:
     description: 'Skip automatic cleanup to keep services running (default: false)'
     required: false
     default: 'false'
+  ci-mode:
+    description: 'Enable CI/TEST mode (bypasses email and captcha validation)'
+    required: false
+    default: 'true'
 
 outputs:
   api-url:
@@ -27,6 +31,8 @@ runs:
       id: setup
       shell: bash
       working-directory: ${{ github.action_path }}/..
+      env:
+        CI_MODE: ${{ inputs.ci-mode }}
       run: action/ci-start.sh
 
     - name: Cleanup Services
