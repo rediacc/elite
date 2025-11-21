@@ -31,9 +31,13 @@ runs:
       id: setup
       shell: bash
       working-directory: ${{ github.action_path }}/..
-      env:
-        CI_MODE: ${{ inputs.ci-mode }}
-      run: action/ci-start.sh
+      run: |
+        echo "=== CI_MODE Debug ==="
+        echo "inputs.ci-mode: '${{ inputs.ci-mode }}'"
+        export CI_MODE="${{ inputs.ci-mode }}"
+        echo "CI_MODE after export: '$CI_MODE'"
+        echo "====================="
+        action/ci-start.sh
 
     - name: Cleanup Services
       if: always() && inputs.keep-alive != 'true'
