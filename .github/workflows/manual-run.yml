@@ -103,6 +103,17 @@ on:
         required: false
         default: false
         type: boolean
+      desktop-resolution:
+        description: 'Desktop screen resolution (only if desktop enabled)'
+        required: false
+        default: '1600x900'
+        type: choice
+        options:
+          - '1280x720'
+          - '1366x768'
+          - '1600x900'
+          - '1920x1080'
+          - '2560x1440'
 
   push:
     branches:
@@ -126,6 +137,7 @@ jobs:
       DEFAULT_VM_OS_IMAGE: 'rediacc-ubuntu-24.04'
       DEFAULT_ENABLE_VMS: 'true'
       DEFAULT_ENABLE_DESKTOP: 'false'
+      DEFAULT_DESKTOP_RESOLUTION: '1600x900'
 
     steps:
       - name: Checkout Repository
@@ -172,6 +184,8 @@ jobs:
       - name: Setup Desktop Environment
         if: github.event.inputs.enable-desktop == 'true'
         id: desktop
+        env:
+          DESKTOP_RESOLUTION: ${{ github.event.inputs.desktop-resolution || env.DEFAULT_DESKTOP_RESOLUTION }}
         run: |
           chmod +x action/ci-desktop.sh
           action/ci-desktop.sh
@@ -446,6 +460,7 @@ jobs:
           echo "   • Cloudflare Tunnel: ${{ steps.tunnel.outputs.tunnel-url }}"
           if [ "${{ github.event.inputs.enable-desktop }}" == "true" ]; then
             echo "   • Desktop (noVNC): ${{ steps.tunnel.outputs.tunnel-url }}/desktop"
+            echo "   • Resolution: ${{ github.event.inputs.desktop-resolution || env.DEFAULT_DESKTOP_RESOLUTION }}"
           fi
           echo ""
 
