@@ -296,6 +296,79 @@ jobs:
           SKIP_MACHINE_REGISTRATION: 'true'
           CI_MODE: ${{ github.event.inputs.ci-mode != 'false' && 'true' || 'false' }}
 
+      - name: Capture VM Provisioning Logs on Failure
+        if: failure() && (github.event.inputs.enable-vms || env.DEFAULT_ENABLE_VMS) == 'true'
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📋 Capturing VM Provisioning Logs (Failure Debug)"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+          # OPS_REPO_PATH is set by setup-vms action
+          OPS_PATH="${OPS_REPO_PATH:-/home/runner/work/_actions/rediacc/ops/main}"
+          cd "$OPS_PATH" || exit 0
+
+          export SDK_HOME="$(pwd)"
+          source scripts/init.sh 2>/dev/null || true
+
+          # Create staging directory for logs
+          mkdir -p staging
+
+          # Bridge VM IP (from previous provisioning attempt)
+          BRIDGE_IP="192.168.111.1"
+
+          echo ""
+          echo "🔍 Attempting to retrieve logs from Bridge VM ($BRIDGE_IP)..."
+          echo ""
+
+          # Try to copy logs from bridge VM
+          if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o BatchMode=yes runner@$BRIDGE_IP "test -f /tmp/rediacc_log.txt" 2>/dev/null; then
+            echo "📄 Bridge Log File (/tmp/rediacc_log.txt):"
+            echo "────────────────────────────────────────────────────────────────"
+            ssh -o StrictHostKeyChecking=no runner@$BRIDGE_IP "cat /tmp/rediacc_log.txt" 2>/dev/null | tee staging/rediacc_log.txt || true
+            echo "────────────────────────────────────────────────────────────────"
+            echo ""
+          else
+            echo "⚠️  Could not access bridge log file"
+          fi
+
+          if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o BatchMode=yes runner@$BRIDGE_IP "test -f /tmp/rediacc_err.txt" 2>/dev/null; then
+            echo "📄 Bridge Error File (/tmp/rediacc_err.txt):"
+            echo "────────────────────────────────────────────────────────────────"
+            ssh -o StrictHostKeyChecking=no runner@$BRIDGE_IP "cat /tmp/rediacc_err.txt" 2>/dev/null | tee staging/rediacc_err.txt || true
+            echo "────────────────────────────────────────────────────────────────"
+            echo ""
+          else
+            echo "⚠️  Could not access bridge error file"
+          fi
+
+          # Also try to get docker logs from the bridge VM
+          echo "📄 Recent Docker Container Logs on Bridge:"
+          echo "────────────────────────────────────────────────────────────────"
+          ssh -o StrictHostKeyChecking=no runner@$BRIDGE_IP "docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}' 2>/dev/null" || true
+          echo ""
+          ssh -o StrictHostKeyChecking=no runner@$BRIDGE_IP "docker logs \$(docker ps -aq -n 1) 2>&1 | tail -100" 2>/dev/null | tee staging/docker_last_container.txt || true
+          echo "────────────────────────────────────────────────────────────────"
+
+          # Check if local staging files exist from orch_copy_back_files
+          if [ -f "$SDK_HOME/staging/rediacc_log.txt" ]; then
+            echo "📄 Local Staging Log (already copied):"
+            cat "$SDK_HOME/staging/rediacc_log.txt"
+          fi
+
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - name: Upload VM Provisioning Logs Artifact
+        if: always() && (github.event.inputs.enable-vms || env.DEFAULT_ENABLE_VMS) == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: vm-provisioning-logs-${{ github.run_id }}
+          path: |
+            /home/runner/work/_actions/rediacc/ops/main/staging/
+            staging/
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Display VM Information
         if: (github.event.inputs.enable-vms || env.DEFAULT_ENABLE_VMS) == 'true'
         run: |
