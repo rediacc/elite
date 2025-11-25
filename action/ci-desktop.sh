@@ -88,6 +88,26 @@ sudo apt-get install -y -qq code
 
 echo "✅ VS Code installed"
 
+# Configure Chromium to skip first-run dialogs and disable telemetry
+echo "🔧 Configuring Chromium policies..."
+sudo mkdir -p /etc/chromium/policies/managed
+sudo tee /etc/chromium/policies/managed/no-first-run.json > /dev/null << 'EOF'
+{
+    "BrowserSignin": 0,
+    "SyncDisabled": true,
+    "MetricsReportingEnabled": false,
+    "DefaultBrowserSettingEnabled": false,
+    "PromotionalTabsEnabled": false,
+    "CommandLineFlagSecurityWarningsEnabled": false
+}
+EOF
+
+# Also set user-level first run flag
+mkdir -p ~/.config/chromium
+touch ~/.config/chromium/First\ Run
+
+echo "✅ Chromium configured"
+
 # Create directories
 mkdir -p ~/.vnc
 mkdir -p /tmp/.X11-unix
