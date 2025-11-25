@@ -2,20 +2,28 @@
 # Routes:
 #   /desktop      → redirect to /desktop/vnc.html
 #   /desktop/*    → noVNC on host (port 6080)
+#   /websockify   → noVNC WebSocket (port 6080) - needed for VNC connection
 #   /*            → nginx web container (port 80)
 #
 # Caddy listens on port 8080 to avoid conflict with nginx on port 80
 
 :8080 {
     # Redirect /desktop to /desktop/vnc.html for convenience
-    # Must come before handle_path to match exactly
     redir /desktop /desktop/vnc.html permanent
+
+    # WebSocket endpoint for VNC - noVNC connects here from the browser
+    # Must handle at root level because noVNC uses absolute /websockify path
+    handle /websockify {
+        reverse_proxy localhost:6080 {
+            header_up Connection {>Connection}
+            header_up Upgrade {>Upgrade}
+        }
+    }
 
     # Desktop/VNC access - proxy to noVNC running on host
     # noVNC serves at /vnc.html and needs WebSocket support
     handle_path /desktop/* {
         reverse_proxy localhost:6080 {
-            # WebSocket support for VNC
             header_up Connection {>Connection}
             header_up Upgrade {>Upgrade}
         }
