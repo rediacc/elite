@@ -109,6 +109,9 @@ elif ! command -v rediacc &> /dev/null; then
                 ;;
         esac
     fi
+
+    # Register rediacc protocol handler
+    rediacc protocol register
 else
     echo "✓ rediacc CLI already installed"
 fi

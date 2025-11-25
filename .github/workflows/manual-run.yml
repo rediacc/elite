@@ -232,6 +232,9 @@ jobs:
             fi
           fi
 
+          # Register rediacc protocol handler
+          rediacc protocol register
+
           # Source environment for credentials
           source action/ci-env.sh
 
