@@ -205,12 +205,31 @@ jobs:
           timeout 60 bash -c 'until ./go health; do sleep 2; done'
           echo "✓ Middleware is healthy"
 
-          # Install rediacc CLI (match version to TAG)
+          # Install rediacc CLI (try local /pypi/ first, fallback to public PyPI)
           TAG_VERSION="${TAG:-latest}"
+          LOCAL_PYPI="http://localhost/pypi/"
+
+          echo "Installing rediacc CLI..."
           if [ "$TAG_VERSION" = "latest" ]; then
-            pip install --quiet rediacc
+            # Try local first, fallback to PyPI
+            if pip install --quiet --find-links "$LOCAL_PYPI" --trusted-host localhost rediacc 2>/dev/null; then
+              echo "✓ Installed rediacc from local /pypi/"
+            else
+              echo "Local package not found, installing from PyPI..."
+              pip install --quiet rediacc
+              echo "✓ Installed rediacc from PyPI"
+            fi
           else
-            pip install --quiet "rediacc==$TAG_VERSION" 2>/dev/null || pip install --quiet rediacc
+            # Try local with version, fallback to PyPI
+            if pip install --quiet --find-links "$LOCAL_PYPI" --trusted-host localhost "rediacc==$TAG_VERSION" 2>/dev/null; then
+              echo "✓ Installed rediacc $TAG_VERSION from local /pypi/"
+            elif pip install --quiet "rediacc==$TAG_VERSION" 2>/dev/null; then
+              echo "✓ Installed rediacc $TAG_VERSION from PyPI"
+            else
+              echo "Version $TAG_VERSION not found, installing latest from PyPI..."
+              pip install --quiet rediacc
+              echo "✓ Installed rediacc (latest) from PyPI"
+            fi
           fi
 
           # Source environment for credentials

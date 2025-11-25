@@ -55,8 +55,10 @@ echo "  Bridge IP: $BRIDGE_IP"
 echo "  API URL: $SYSTEM_API_URL"
 echo ""
 
-# Install rediacc CLI from PyPI if not already installed
+# Install rediacc CLI (try local /pypi/ first, fallback to public PyPI)
 # Skip installation if REDIACC_SKIP_CLI_INSTALL is set (e.g., when testing local CLI changes)
+LOCAL_PYPI="http://localhost/pypi/"
+
 if [ "$REDIACC_SKIP_CLI_INSTALL" = "true" ]; then
     echo "⚠ Skipping CLI installation (REDIACC_SKIP_CLI_INSTALL=true)"
     if ! command -v rediacc &> /dev/null; then
@@ -70,27 +72,43 @@ elif ! command -v rediacc &> /dev/null; then
     CLI_VERSION="${TAG:-latest}"
 
     if [ "$CLI_VERSION" = "latest" ]; then
-        echo "Installing latest rediacc CLI from PyPI..."
-        pip install --quiet rediacc
+        # Try local first, fallback to PyPI
+        if pip install --quiet --find-links "$LOCAL_PYPI" --trusted-host localhost rediacc 2>/dev/null; then
+            echo "✓ Installed rediacc from local /pypi/"
+        else
+            echo "Local package not found, installing from PyPI..."
+            pip install --quiet rediacc
+            echo "✓ Installed rediacc from PyPI"
+        fi
     else
         # If version starts with comparison operator (>=, ==, ~=, etc.), use as-is
         # Otherwise, add == for exact version match
         case "$CLI_VERSION" in
             [\>\<\=\~\!]*)
                 echo "Installing rediacc CLI with constraint: $CLI_VERSION..."
-                pip install --quiet "rediacc${CLI_VERSION}"
+                # Try local first with constraint
+                if pip install --quiet --find-links "$LOCAL_PYPI" --trusted-host localhost "rediacc${CLI_VERSION}" 2>/dev/null; then
+                    echo "✓ Installed from local /pypi/"
+                else
+                    pip install --quiet "rediacc${CLI_VERSION}"
+                    echo "✓ Installed from PyPI"
+                fi
                 ;;
             *)
                 echo "Installing rediacc CLI version: $CLI_VERSION..."
-                # Try specific version, fall back to latest if not available on PyPI
-                if ! pip install --quiet "rediacc==$CLI_VERSION" 2>/dev/null; then
-                    echo "⚠ Version $CLI_VERSION not available on PyPI, falling back to latest..."
+                # Try local first, then PyPI, then latest as fallback
+                if pip install --quiet --find-links "$LOCAL_PYPI" --trusted-host localhost "rediacc==$CLI_VERSION" 2>/dev/null; then
+                    echo "✓ Installed rediacc $CLI_VERSION from local /pypi/"
+                elif pip install --quiet "rediacc==$CLI_VERSION" 2>/dev/null; then
+                    echo "✓ Installed rediacc $CLI_VERSION from PyPI"
+                else
+                    echo "⚠ Version $CLI_VERSION not available, falling back to latest..."
                     pip install --quiet rediacc
+                    echo "✓ Installed rediacc (latest) from PyPI"
                 fi
                 ;;
         esac
     fi
-    echo "✓ rediacc CLI installed"
 else
     echo "✓ rediacc CLI already installed"
 fi
