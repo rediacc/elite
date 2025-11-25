@@ -38,7 +38,6 @@ sudo apt-get install -y -qq \
     novnc \
     websockify \
     dbus-x11 \
-    chromium-browser \
     > /dev/null 2>&1
 
 echo "✅ Packages installed"
