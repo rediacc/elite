@@ -98,6 +98,11 @@ on:
         required: false
         default: true
         type: boolean
+      enable-desktop:
+        description: 'Enable browser-accessible desktop environment (Xfce + noVNC)'
+        required: false
+        default: false
+        type: boolean
 
   push:
     branches:
@@ -120,6 +125,7 @@ jobs:
       DEFAULT_VM_PROVIDER: 'kvm'
       DEFAULT_VM_OS_IMAGE: 'rediacc-ubuntu-24.04'
       DEFAULT_ENABLE_VMS: 'true'
+      DEFAULT_ENABLE_DESKTOP: 'false'
 
     steps:
       - name: Checkout Repository
@@ -136,6 +142,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
           TAG: ${{ env.TAG }}
+          ENABLE_DESKTOP: ${{ github.event.inputs.enable-desktop == 'true' && 'true' || 'false' }}
         run: ./action/ci-pull-images.sh
 
       - name: Create Debug Session
@@ -159,6 +166,15 @@ jobs:
           TAG: ${{ env.TAG }}
           # Machine registration will happen later after VMs are provisioned
           SKIP_MACHINE_REGISTRATION: 'true'
+          # Enable desktop gateway if requested
+          ENABLE_DESKTOP: ${{ github.event.inputs.enable-desktop == 'true' && 'true' || 'false' }}
+
+      - name: Setup Desktop Environment
+        if: github.event.inputs.enable-desktop == 'true'
+        id: desktop
+        run: |
+          chmod +x action/ci-desktop.sh
+          action/ci-desktop.sh
 
       - name: Extract SSH Keys from Middleware
         if: (github.event.inputs.enable-vms || env.DEFAULT_ENABLE_VMS) == 'true'
@@ -341,7 +357,8 @@ jobs:
         with:
           # Elite services always run on localhost (runner or local machine)
           # VMs are separate infrastructure resources for testing, not service deployment targets
-          url: http://localhost
+          # When desktop is enabled, route through Caddy gateway on port 8080
+          url: ${{ github.event.inputs.enable-desktop == 'true' && 'http://localhost:8080' || 'http://localhost' }}
           timeout: 30
 
       - name: Initial Service Status
@@ -368,7 +385,8 @@ jobs:
             "access": {
               "tunnel_url": "${{ steps.tunnel.outputs.tunnel-url }}",
               "api_url": "${{ steps.services.outputs.api-url }}",
-              "web_url": "http://localhost"
+              "web_url": "http://localhost",
+              "desktop_url": $(if [ "${{ github.event.inputs.enable-desktop }}" == "true" ]; then echo "\"${{ steps.tunnel.outputs.tunnel-url }}/desktop\""; else echo "null"; fi)
             },
             "database": {
               "connection_string": "Server=sql,1433;Database=RediaccMiddleware;User Id=rediacc;TrustServerCertificate=True"
@@ -393,13 +411,21 @@ jobs:
               "web_url": "${{ steps.tmate.outputs.web-url || null }}",
               "ssh_ro_connection": "${{ steps.tmate.outputs.ssh-ro-connection || null }}",
               "web_ro_url": "${{ steps.tmate.outputs.web-ro-url || null }}"
+            },
+            "desktop": {
+              "enabled": ${{ github.event.inputs.enable-desktop == 'true' }},
+              "url": $(if [ "${{ github.event.inputs.enable-desktop }}" == "true" ]; then echo "\"${{ steps.tunnel.outputs.tunnel-url }}/desktop\""; else echo "null"; fi),
+              "local_url": $(if [ "${{ github.event.inputs.enable-desktop }}" == "true" ]; then echo "\"http://localhost:6080/vnc.html\""; else echo "null"; fi)
             }
           }
           EOF
 
-          # Pretty print for logs
+          # Beautify JSON with 2-space indentation
+          jq --indent 2 '.' deployment-info.json > deployment-info.json.tmp && mv deployment-info.json.tmp deployment-info.json
+
+          # Display for logs
           echo "📋 Deployment Information:"
-          cat deployment-info.json | jq .
+          cat deployment-info.json
 
       - name: Upload Deployment Info Artifact
         uses: actions/upload-artifact@v4
@@ -418,6 +444,9 @@ jobs:
           echo ""
           echo "🌐 WEB ACCESS:"
           echo "   • Cloudflare Tunnel: ${{ steps.tunnel.outputs.tunnel-url }}"
+          if [ "${{ github.event.inputs.enable-desktop }}" == "true" ]; then
+            echo "   • Desktop (noVNC): ${{ steps.tunnel.outputs.tunnel-url }}/desktop"
+          fi
           echo ""
 
           # Display VM infrastructure details if enabled

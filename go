@@ -14,6 +14,11 @@ _docker_compose() {
         cmd="$cmd -f docker-compose.standalone.yml"
     fi
 
+    # Add desktop gateway if ENABLE_DESKTOP is set (CI mode only)
+    if [ "$ENABLE_DESKTOP" == "true" ]; then
+        cmd="$cmd -f docker-compose.desktop.yml"
+    fi
+
     # Add project name if instance name is set (cloud mode)
     if [ -n "$INSTANCE_NAME" ]; then
         cmd="$cmd --project-name $INSTANCE_NAME"

@@ -1,0 +1,27 @@
+# Docker Compose override for desktop access in CI mode
+# Adds a Caddy gateway that routes /desktop to noVNC on the host
+#
+# Usage: docker compose -f docker-compose.yml -f docker-compose.standalone.yml -f docker-compose.desktop.yml up -d
+#
+# Prerequisites:
+#   - Run action/ci-desktop.sh first to start noVNC on the host
+#   - noVNC must be running on port 6080 (configurable via DESKTOP_NOVNC_PORT)
+#
+# Architecture:
+#   - Gateway runs on host network to access both web container and host's noVNC
+#   - Routes /desktop/* to localhost:6080 (noVNC)
+#   - Routes /* to localhost:80 (nginx web container)
+
+services:
+  # Caddy gateway - main entry point
+  # Uses host network to access both Docker services and host noVNC
+  gateway:
+    image: caddy:alpine
+    container_name: ${INSTANCE_NAME:-rediacc}-gateway
+    network_mode: host
+    volumes:
+      - ./desktop/Caddyfile:/etc/caddy/Caddyfile:ro
+      - /etc/localtime:/etc/localtime:ro
+    depends_on:
+      - web
+    restart: unless-stopped
