@@ -101,7 +101,7 @@ on:
       enable-desktop:
         description: 'Enable browser-accessible desktop environment (Xfce + noVNC)'
         required: false
-        default: false
+        default: true
         type: boolean
       desktop-resolution:
         description: 'Desktop screen resolution (only if desktop enabled)'
@@ -137,7 +137,7 @@ jobs:
       DEFAULT_VM_PROVIDER: 'kvm'
       DEFAULT_VM_OS_IMAGE: 'rediacc-ubuntu-24.04'
       DEFAULT_ENABLE_VMS: 'true'
-      DEFAULT_ENABLE_DESKTOP: 'false'
+      DEFAULT_ENABLE_DESKTOP: 'true'
       DEFAULT_DESKTOP_RESOLUTION: '1600x900'
 
     steps:
