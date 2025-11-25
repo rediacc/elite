@@ -1,11 +1,16 @@
 # Caddy reverse proxy configuration for desktop access
 # Routes:
-#   /desktop/* → noVNC on host (port 6080)
-#   /*         → nginx web container (port 80)
+#   /desktop      → redirect to /desktop/vnc.html
+#   /desktop/*    → noVNC on host (port 6080)
+#   /*            → nginx web container (port 80)
 #
 # Caddy listens on port 8080 to avoid conflict with nginx on port 80
 
 :8080 {
+    # Redirect /desktop to /desktop/vnc.html for convenience
+    # Must come before handle_path to match exactly
+    redir /desktop /desktop/vnc.html permanent
+
     # Desktop/VNC access - proxy to noVNC running on host
     # noVNC serves at /vnc.html and needs WebSocket support
     handle_path /desktop/* {
@@ -14,11 +19,6 @@
             header_up Connection {>Connection}
             header_up Upgrade {>Upgrade}
         }
-    }
-
-    # Redirect /desktop to /desktop/vnc.html for convenience
-    handle /desktop {
-        redir /desktop/vnc.html permanent
     }
 
     # Everything else goes to nginx (also on localhost since we use host network)
