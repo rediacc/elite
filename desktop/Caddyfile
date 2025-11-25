@@ -8,8 +8,8 @@
 # Caddy listens on port 8080 to avoid conflict with nginx on port 80
 
 :8080 {
-    # Redirect /desktop to noVNC with WebSocket path pointing to /vnc
-    redir /desktop /desktop/vnc.html?path=vnc permanent
+    # Redirect /desktop to noVNC with auto-connect enabled
+    redir /desktop /desktop/vnc.html?path=vnc&autoconnect=true permanent
 
     # VNC WebSocket endpoint - websockify handles WebSocket upgrade at any path
     handle /vnc {
