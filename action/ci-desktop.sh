@@ -10,6 +10,38 @@
 
 set -e
 
+# Cleanup function for graceful shutdown
+cleanup() {
+    echo "🧹 Cleaning up desktop processes..."
+    if [ -f /tmp/desktop-pids.txt ]; then
+        # Kill processes in reverse order of startup
+        while IFS='=' read -r name pid; do
+            if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+                echo "  Stopping $name (PID: $pid)..."
+                kill "$pid" 2>/dev/null || true
+            fi
+        done < <(tac /tmp/desktop-pids.txt)
+        rm -f /tmp/desktop-pids.txt
+    fi
+}
+trap cleanup EXIT
+
+# Helper function to wait for a port to be ready
+wait_for_port() {
+    local port=$1
+    local timeout=${2:-30}
+    local elapsed=0
+
+    while ! nc -z localhost "$port" 2>/dev/null; do
+        if [ $elapsed -ge $timeout ]; then
+            return 1
+        fi
+        sleep 1
+        elapsed=$((elapsed + 1))
+    done
+    return 0
+}
+
 DISPLAY_NUM="${DESKTOP_DISPLAY:-99}"
 VNC_PORT="${DESKTOP_VNC_PORT:-5999}"
 NOVNC_PORT="${DESKTOP_NOVNC_PORT:-6080}"
@@ -38,19 +70,19 @@ sudo apt-get install -y -qq \
     novnc \
     websockify \
     dbus-x11 \
-    > /dev/null 2>&1
+    netcat-openbsd
 
 echo "✅ Desktop packages installed"
 
 # Install VS Code (official Microsoft repository)
 echo "📦 Installing VS Code..."
-sudo apt-get install -y -qq wget gpg > /dev/null 2>&1
+sudo apt-get install -y -qq wget gpg
 wget -qO- https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > /tmp/packages.microsoft.gpg
 sudo install -D -o root -g root -m 644 /tmp/packages.microsoft.gpg /etc/apt/keyrings/packages.microsoft.gpg
 echo "deb [arch=amd64,arm64,armhf signed-by=/etc/apt/keyrings/packages.microsoft.gpg] https://packages.microsoft.com/repos/code stable main" | sudo tee /etc/apt/sources.list.d/vscode.list > /dev/null
 rm -f /tmp/packages.microsoft.gpg
 sudo apt-get update -qq
-sudo apt-get install -y -qq code > /dev/null 2>&1
+sudo apt-get install -y -qq code
 
 echo "✅ VS Code installed"
 
@@ -87,7 +119,8 @@ sleep 3
 
 # Verify Xfce is running
 if ! kill -0 $XFCE_PID 2>/dev/null; then
-    echo "⚠️  Xfce may have issues, continuing anyway..."
+    echo "❌ Failed to start Xfce desktop session."
+    exit 1
 fi
 echo "✅ Xfce4 desktop started"
 
@@ -99,13 +132,11 @@ x11vnc -display :${DISPLAY_NUM} \
     -forever \
     -shared \
     -bg \
-    -o /tmp/x11vnc.log \
-    > /dev/null 2>&1
+    -o /tmp/x11vnc.log
 
-sleep 2
-
-# Verify VNC is running
-if ! pgrep -f "x11vnc.*${VNC_PORT}" > /dev/null; then
+# Wait for VNC port to be ready
+echo "  Waiting for VNC server to be ready..."
+if ! wait_for_port ${VNC_PORT} 10; then
     echo "❌ Failed to start VNC server"
     cat /tmp/x11vnc.log 2>/dev/null || true
     exit 1
@@ -123,10 +154,10 @@ fi
 
 websockify --web=${NOVNC_WEB} ${NOVNC_PORT} localhost:${VNC_PORT} &
 WEBSOCKIFY_PID=$!
-sleep 2
 
-# Verify websockify is running
-if ! kill -0 $WEBSOCKIFY_PID 2>/dev/null; then
+# Wait for noVNC port to be ready
+echo "  Waiting for noVNC to be ready..."
+if ! wait_for_port ${NOVNC_PORT} 10; then
     echo "❌ Failed to start noVNC/websockify"
     exit 1
 fi
@@ -151,3 +182,6 @@ if [ -n "$GITHUB_OUTPUT" ]; then
     echo "desktop-port=${NOVNC_PORT}" >> $GITHUB_OUTPUT
     echo "desktop-url=http://localhost:${NOVNC_PORT}/vnc.html" >> $GITHUB_OUTPUT
 fi
+
+# Clear the trap since we want processes to keep running
+trap - EXIT
