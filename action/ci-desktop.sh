@@ -70,7 +70,9 @@ sudo apt-get install -y -qq \
     novnc \
     websockify \
     dbus-x11 \
-    netcat-openbsd
+    netcat-openbsd \
+    gnome-keyring \
+    libsecret-1-0
 
 echo "✅ Desktop packages installed"
 
@@ -110,6 +112,14 @@ export DISPLAY=:${DISPLAY_NUM}
 echo "🔌 Starting D-Bus session..."
 eval $(dbus-launch --sh-syntax)
 export DBUS_SESSION_BUS_ADDRESS
+
+# Initialize gnome-keyring with empty password (prevents unlock prompts)
+echo "🔐 Initializing keyring with empty password..."
+mkdir -p ~/.local/share/keyrings
+echo -n "" | gnome-keyring-daemon --unlock --components=secrets,pkcs11
+eval $(echo -n "" | gnome-keyring-daemon --start --components=secrets,pkcs11)
+export GNOME_KEYRING_CONTROL
+export SSH_AUTH_SOCK
 
 # Start Xfce4 session
 echo "🖥️  Starting Xfce4 desktop..."
