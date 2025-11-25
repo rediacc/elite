@@ -13,7 +13,8 @@
 
     # WebSocket endpoint for VNC - noVNC connects here from the browser
     # Must handle at root level because noVNC uses absolute /websockify path
-    handle /websockify {
+    # Use handle_path to strip /websockify - websockify expects WebSocket at root /
+    handle_path /websockify {
         reverse_proxy localhost:6080 {
             header_up Connection {>Connection}
             header_up Upgrade {>Upgrade}
