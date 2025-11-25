@@ -29,6 +29,12 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
     echo "Pulling bridge image..."
     docker pull --quiet "${DOCKER_BRIDGE_IMAGE}"
 
+    # Pull Caddy gateway image if desktop is enabled
+    if [ "$ENABLE_DESKTOP" == "true" ]; then
+        echo "Pulling caddy:alpine for desktop gateway..."
+        docker pull --quiet caddy:alpine
+    fi
+
     echo "✅ All images pulled successfully"
 )
 

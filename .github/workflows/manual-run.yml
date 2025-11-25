@@ -98,6 +98,23 @@ on:
         required: false
         default: true
         type: boolean
+      enable-desktop:
+        description: 'Enable browser-accessible desktop environment (Xfce + noVNC)'
+        required: false
+        default: true
+        type: boolean
+      desktop-resolution:
+        description: 'Desktop screen resolution (only if desktop enabled)'
+        required: false
+        default: '1600x900'
+        type: choice
+        options:
+          - '1024x768'
+          - '1280x720'
+          - '1366x768'
+          - '1600x900'
+          - '1920x1080'
+          - '2560x1440'
 
   push:
     branches:
@@ -120,6 +137,8 @@ jobs:
       DEFAULT_VM_PROVIDER: 'kvm'
       DEFAULT_VM_OS_IMAGE: 'rediacc-ubuntu-24.04'
       DEFAULT_ENABLE_VMS: 'true'
+      DEFAULT_ENABLE_DESKTOP: 'true'
+      DEFAULT_DESKTOP_RESOLUTION: '1600x900'
 
     steps:
       - name: Checkout Repository
@@ -136,6 +155,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
           TAG: ${{ env.TAG }}
+          ENABLE_DESKTOP: ${{ github.event.inputs.enable-desktop == 'true' && 'true' || 'false' }}
         run: ./action/ci-pull-images.sh
 
       - name: Create Debug Session
@@ -159,6 +179,17 @@ jobs:
           TAG: ${{ env.TAG }}
           # Machine registration will happen later after VMs are provisioned
           SKIP_MACHINE_REGISTRATION: 'true'
+          # Enable desktop gateway if requested
+          ENABLE_DESKTOP: ${{ github.event.inputs.enable-desktop == 'true' && 'true' || 'false' }}
+
+      - name: Setup Desktop Environment
+        if: github.event.inputs.enable-desktop == 'true'
+        id: desktop
+        env:
+          DESKTOP_RESOLUTION: ${{ github.event.inputs.desktop-resolution || env.DEFAULT_DESKTOP_RESOLUTION }}
+        run: |
+          chmod +x action/ci-desktop.sh
+          action/ci-desktop.sh
 
       - name: Extract SSH Keys from Middleware
         if: (github.event.inputs.enable-vms || env.DEFAULT_ENABLE_VMS) == 'true'
@@ -174,13 +205,35 @@ jobs:
           timeout 60 bash -c 'until ./go health; do sleep 2; done'
           echo "✓ Middleware is healthy"
 
-          # Install rediacc CLI (match version to TAG)
+          # Install rediacc CLI (try local /pypi/ first, fallback to public PyPI)
           TAG_VERSION="${TAG:-latest}"
+          LOCAL_PYPI="http://localhost/pypi/"
+
+          echo "Installing rediacc CLI..."
           if [ "$TAG_VERSION" = "latest" ]; then
-            pip install --quiet rediacc
+            # Try local first, fallback to PyPI
+            if pip install --quiet --find-links "$LOCAL_PYPI" --trusted-host localhost rediacc 2>/dev/null; then
+              echo "✓ Installed rediacc from local /pypi/"
+            else
+              echo "Local package not found, installing from PyPI..."
+              pip install --quiet rediacc
+              echo "✓ Installed rediacc from PyPI"
+            fi
           else
-            pip install --quiet "rediacc==$TAG_VERSION" 2>/dev/null || pip install --quiet rediacc
+            # Try local with version, fallback to PyPI
+            if pip install --quiet --find-links "$LOCAL_PYPI" --trusted-host localhost "rediacc==$TAG_VERSION" 2>/dev/null; then
+              echo "✓ Installed rediacc $TAG_VERSION from local /pypi/"
+            elif pip install --quiet "rediacc==$TAG_VERSION" 2>/dev/null; then
+              echo "✓ Installed rediacc $TAG_VERSION from PyPI"
+            else
+              echo "Version $TAG_VERSION not found, installing latest from PyPI..."
+              pip install --quiet rediacc
+              echo "✓ Installed rediacc (latest) from PyPI"
+            fi
           fi
+
+          # Register rediacc protocol handler
+          rediacc protocol register
 
           # Source environment for credentials
           source action/ci-env.sh
@@ -242,6 +295,79 @@ jobs:
           SYSTEM_API_URL: http://localhost/api
           SKIP_MACHINE_REGISTRATION: 'true'
           CI_MODE: ${{ github.event.inputs.ci-mode != 'false' && 'true' || 'false' }}
+
+      - name: Capture VM Provisioning Logs on Failure
+        if: failure() && (github.event.inputs.enable-vms || env.DEFAULT_ENABLE_VMS) == 'true'
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📋 Capturing VM Provisioning Logs (Failure Debug)"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+          # OPS_REPO_PATH is set by setup-vms action
+          OPS_PATH="${OPS_REPO_PATH:-/home/runner/work/_actions/rediacc/ops/main}"
+          cd "$OPS_PATH" || exit 0
+
+          export SDK_HOME="$(pwd)"
+          source scripts/init.sh 2>/dev/null || true
+
+          # Create staging directory for logs
+          mkdir -p staging
+
+          # Bridge VM IP (from previous provisioning attempt)
+          BRIDGE_IP="192.168.111.1"
+
+          echo ""
+          echo "🔍 Attempting to retrieve logs from Bridge VM ($BRIDGE_IP)..."
+          echo ""
+
+          # Try to copy logs from bridge VM
+          if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o BatchMode=yes runner@$BRIDGE_IP "test -f /tmp/rediacc_log.txt" 2>/dev/null; then
+            echo "📄 Bridge Log File (/tmp/rediacc_log.txt):"
+            echo "────────────────────────────────────────────────────────────────"
+            ssh -o StrictHostKeyChecking=no runner@$BRIDGE_IP "cat /tmp/rediacc_log.txt" 2>/dev/null | tee staging/rediacc_log.txt || true
+            echo "────────────────────────────────────────────────────────────────"
+            echo ""
+          else
+            echo "⚠️  Could not access bridge log file"
+          fi
+
+          if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o BatchMode=yes runner@$BRIDGE_IP "test -f /tmp/rediacc_err.txt" 2>/dev/null; then
+            echo "📄 Bridge Error File (/tmp/rediacc_err.txt):"
+            echo "────────────────────────────────────────────────────────────────"
+            ssh -o StrictHostKeyChecking=no runner@$BRIDGE_IP "cat /tmp/rediacc_err.txt" 2>/dev/null | tee staging/rediacc_err.txt || true
+            echo "────────────────────────────────────────────────────────────────"
+            echo ""
+          else
+            echo "⚠️  Could not access bridge error file"
+          fi
+
+          # Also try to get docker logs from the bridge VM
+          echo "📄 Recent Docker Container Logs on Bridge:"
+          echo "────────────────────────────────────────────────────────────────"
+          ssh -o StrictHostKeyChecking=no runner@$BRIDGE_IP "docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}' 2>/dev/null" || true
+          echo ""
+          ssh -o StrictHostKeyChecking=no runner@$BRIDGE_IP "docker logs \$(docker ps -aq -n 1) 2>&1 | tail -100" 2>/dev/null | tee staging/docker_last_container.txt || true
+          echo "────────────────────────────────────────────────────────────────"
+
+          # Check if local staging files exist from orch_copy_back_files
+          if [ -f "$SDK_HOME/staging/rediacc_log.txt" ]; then
+            echo "📄 Local Staging Log (already copied):"
+            cat "$SDK_HOME/staging/rediacc_log.txt"
+          fi
+
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - name: Upload VM Provisioning Logs Artifact
+        if: always() && (github.event.inputs.enable-vms || env.DEFAULT_ENABLE_VMS) == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: vm-provisioning-logs-${{ github.run_id }}
+          path: |
+            /home/runner/work/_actions/rediacc/ops/main/staging/
+            staging/
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Display VM Information
         if: (github.event.inputs.enable-vms || env.DEFAULT_ENABLE_VMS) == 'true'
@@ -341,7 +467,8 @@ jobs:
         with:
           # Elite services always run on localhost (runner or local machine)
           # VMs are separate infrastructure resources for testing, not service deployment targets
-          url: http://localhost
+          # When desktop is enabled, route through Caddy gateway on port 8080
+          url: ${{ github.event.inputs.enable-desktop == 'true' && 'http://localhost:8080' || 'http://localhost' }}
           timeout: 30
 
       - name: Initial Service Status
@@ -368,7 +495,8 @@ jobs:
             "access": {
               "tunnel_url": "${{ steps.tunnel.outputs.tunnel-url }}",
               "api_url": "${{ steps.services.outputs.api-url }}",
-              "web_url": "http://localhost"
+              "web_url": "http://localhost",
+              "desktop_url": $(if [ "${{ github.event.inputs.enable-desktop }}" == "true" ]; then echo "\"${{ steps.tunnel.outputs.tunnel-url }}/desktop\""; else echo "null"; fi)
             },
             "database": {
               "connection_string": "Server=sql,1433;Database=RediaccMiddleware;User Id=rediacc;TrustServerCertificate=True"
@@ -393,13 +521,21 @@ jobs:
               "web_url": "${{ steps.tmate.outputs.web-url || null }}",
               "ssh_ro_connection": "${{ steps.tmate.outputs.ssh-ro-connection || null }}",
               "web_ro_url": "${{ steps.tmate.outputs.web-ro-url || null }}"
+            },
+            "desktop": {
+              "enabled": ${{ github.event.inputs.enable-desktop == 'true' }},
+              "url": $(if [ "${{ github.event.inputs.enable-desktop }}" == "true" ]; then echo "\"${{ steps.tunnel.outputs.tunnel-url }}/desktop\""; else echo "null"; fi),
+              "local_url": $(if [ "${{ github.event.inputs.enable-desktop }}" == "true" ]; then echo "\"http://localhost:6080/vnc.html\""; else echo "null"; fi)
             }
           }
           EOF
 
-          # Pretty print for logs
+          # Beautify JSON with 2-space indentation
+          jq --indent 2 '.' deployment-info.json > deployment-info.json.tmp && mv deployment-info.json.tmp deployment-info.json
+
+          # Display for logs
           echo "📋 Deployment Information:"
-          cat deployment-info.json | jq .
+          cat deployment-info.json
 
       - name: Upload Deployment Info Artifact
         uses: actions/upload-artifact@v4
@@ -418,6 +554,10 @@ jobs:
           echo ""
           echo "🌐 WEB ACCESS:"
           echo "   • Cloudflare Tunnel: ${{ steps.tunnel.outputs.tunnel-url }}"
+          if [ "${{ github.event.inputs.enable-desktop }}" == "true" ]; then
+            echo "   • Desktop (noVNC): ${{ steps.tunnel.outputs.tunnel-url }}/desktop"
+            echo "   • Resolution: ${{ github.event.inputs.desktop-resolution || env.DEFAULT_DESKTOP_RESOLUTION }}"
+          fi
           echo ""
 
           # Display VM infrastructure details if enabled
