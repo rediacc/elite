@@ -108,6 +108,27 @@ touch ~/.config/chromium/First\ Run
 
 echo "✅ Chromium configured"
 
+# Create desktop shortcut for localhost
+echo "🔗 Creating desktop shortcut..."
+mkdir -p ~/Desktop
+cat > ~/Desktop/localhost.desktop << 'EOF'
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Rediacc (localhost)
+Comment=Open Rediacc in Chromium
+Exec=chromium-browser --no-sandbox http://localhost
+Icon=chromium-browser
+Terminal=false
+Categories=Network;WebBrowser;
+EOF
+chmod +x ~/Desktop/localhost.desktop
+
+# Mark desktop file as trusted (skip "untrusted" prompt in Xfce)
+gio set ~/Desktop/localhost.desktop metadata::trusted true 2>/dev/null || true
+
+echo "✅ Desktop shortcut created"
+
 # Create directories
 mkdir -p ~/.vnc
 mkdir -p /tmp/.X11-unix
