@@ -109,6 +109,7 @@ on:
         default: '1600x900'
         type: choice
         options:
+          - '1024x768'
           - '1280x720'
           - '1366x768'
           - '1600x900'
