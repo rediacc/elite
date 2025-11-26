@@ -98,11 +98,16 @@ on:
         required: false
         default: true
         type: boolean
-      enable-desktop:
-        description: 'Enable browser-accessible desktop environment (Xfce + noVNC)'
+      desktop-environment:
+        description: 'Desktop environment for browser access (via noVNC)'
         required: false
-        default: true
-        type: boolean
+        default: 'xfce'
+        type: choice
+        options:
+          - 'none'
+          - 'xfce'
+          - 'gnome'
+          - 'mate'
       desktop-resolution:
         description: 'Desktop screen resolution (only if desktop enabled)'
         required: false
@@ -137,7 +142,7 @@ jobs:
       DEFAULT_VM_PROVIDER: 'kvm'
       DEFAULT_VM_OS_IMAGE: 'rediacc-ubuntu-24.04'
       DEFAULT_ENABLE_VMS: 'true'
-      DEFAULT_ENABLE_DESKTOP: 'true'
+      DEFAULT_DESKTOP_ENVIRONMENT: 'xfce'
       DEFAULT_DESKTOP_RESOLUTION: '1600x900'
 
     steps:
@@ -155,7 +160,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
           TAG: ${{ env.TAG }}
-          ENABLE_DESKTOP: ${{ github.event.inputs.enable-desktop == 'true' && 'true' || 'false' }}
+          ENABLE_DESKTOP: ${{ (github.event.inputs.desktop-environment || env.DEFAULT_DESKTOP_ENVIRONMENT) != 'none' && 'true' || 'false' }}
         run: ./action/ci-pull-images.sh
 
       - name: Create Debug Session
@@ -180,12 +185,13 @@ jobs:
           # Machine registration will happen later after VMs are provisioned
           SKIP_MACHINE_REGISTRATION: 'true'
           # Enable desktop gateway if requested
-          ENABLE_DESKTOP: ${{ github.event.inputs.enable-desktop == 'true' && 'true' || 'false' }}
+          ENABLE_DESKTOP: ${{ (github.event.inputs.desktop-environment || env.DEFAULT_DESKTOP_ENVIRONMENT) != 'none' && 'true' || 'false' }}
 
       - name: Setup Desktop Environment
-        if: github.event.inputs.enable-desktop == 'true'
+        if: (github.event.inputs.desktop-environment || env.DEFAULT_DESKTOP_ENVIRONMENT) != 'none'
         id: desktop
         env:
+          DESKTOP_ENVIRONMENT: ${{ github.event.inputs.desktop-environment || env.DEFAULT_DESKTOP_ENVIRONMENT }}
           DESKTOP_RESOLUTION: ${{ github.event.inputs.desktop-resolution || env.DEFAULT_DESKTOP_RESOLUTION }}
         run: |
           chmod +x action/ci-desktop.sh
@@ -468,7 +474,7 @@ jobs:
           # Elite services always run on localhost (runner or local machine)
           # VMs are separate infrastructure resources for testing, not service deployment targets
           # When desktop is enabled, route through Caddy gateway on port 8080
-          url: ${{ github.event.inputs.enable-desktop == 'true' && 'http://localhost:8080' || 'http://localhost' }}
+          url: ${{ (github.event.inputs.desktop-environment || env.DEFAULT_DESKTOP_ENVIRONMENT) != 'none' && 'http://localhost:8080' || 'http://localhost' }}
           timeout: 30
 
       - name: Initial Service Status
@@ -496,7 +502,7 @@ jobs:
               "tunnel_url": "${{ steps.tunnel.outputs.tunnel-url }}",
               "api_url": "${{ steps.services.outputs.api-url }}",
               "web_url": "http://localhost",
-              "desktop_url": $(if [ "${{ github.event.inputs.enable-desktop }}" == "true" ]; then echo "\"${{ steps.tunnel.outputs.tunnel-url }}/desktop\""; else echo "null"; fi)
+              "desktop_url": $(if [ "${{ (github.event.inputs.desktop-environment || env.DEFAULT_DESKTOP_ENVIRONMENT) }}" != "none" ]; then echo "\"${{ steps.tunnel.outputs.tunnel-url }}/desktop\""; else echo "null"; fi)
             },
             "database": {
               "connection_string": "Server=sql,1433;Database=RediaccMiddleware;User Id=rediacc;TrustServerCertificate=True"
@@ -523,9 +529,10 @@ jobs:
               "web_ro_url": "${{ steps.tmate.outputs.web-ro-url || null }}"
             },
             "desktop": {
-              "enabled": ${{ github.event.inputs.enable-desktop == 'true' }},
-              "url": $(if [ "${{ github.event.inputs.enable-desktop }}" == "true" ]; then echo "\"${{ steps.tunnel.outputs.tunnel-url }}/desktop\""; else echo "null"; fi),
-              "local_url": $(if [ "${{ github.event.inputs.enable-desktop }}" == "true" ]; then echo "\"http://localhost:6080/vnc.html\""; else echo "null"; fi)
+              "enabled": ${{ (github.event.inputs.desktop-environment || env.DEFAULT_DESKTOP_ENVIRONMENT) != 'none' }},
+              "environment": "${{ github.event.inputs.desktop-environment || env.DEFAULT_DESKTOP_ENVIRONMENT }}",
+              "url": $(if [ "${{ (github.event.inputs.desktop-environment || env.DEFAULT_DESKTOP_ENVIRONMENT) }}" != "none" ]; then echo "\"${{ steps.tunnel.outputs.tunnel-url }}/desktop\""; else echo "null"; fi),
+              "local_url": $(if [ "${{ (github.event.inputs.desktop-environment || env.DEFAULT_DESKTOP_ENVIRONMENT) }}" != "none" ]; then echo "\"http://localhost:6080/vnc.html\""; else echo "null"; fi)
             }
           }
           EOF
@@ -554,8 +561,10 @@ jobs:
           echo ""
           echo "🌐 WEB ACCESS:"
           echo "   • Cloudflare Tunnel: ${{ steps.tunnel.outputs.tunnel-url }}"
-          if [ "${{ github.event.inputs.enable-desktop }}" == "true" ]; then
+          DESKTOP_ENV="${{ github.event.inputs.desktop-environment || env.DEFAULT_DESKTOP_ENVIRONMENT }}"
+          if [ "$DESKTOP_ENV" != "none" ]; then
             echo "   • Desktop (noVNC): ${{ steps.tunnel.outputs.tunnel-url }}/desktop"
+            echo "   • Environment: $DESKTOP_ENV"
             echo "   • Resolution: ${{ github.event.inputs.desktop-resolution || env.DEFAULT_DESKTOP_RESOLUTION }}"
           fi
           echo ""
