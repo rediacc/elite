@@ -157,6 +157,13 @@ start_mate() {
 # Common Setup Functions
 # ============================================================================
 
+install_nodejs() {
+    echo "📦 Installing Node.js 24.x..."
+    curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
+    sudo apt-get install -y -qq nodejs
+    echo "✅ Node.js $(node -v) installed"
+}
+
 install_vscode() {
     echo "📦 Installing VS Code..."
     sudo apt-get install -y -qq wget gpg
@@ -337,6 +344,7 @@ case "$DESKTOP_ENVIRONMENT" in
         ;;
 esac
 
+install_nodejs
 install_vscode
 configure_chromium
 create_desktop_shortcut
