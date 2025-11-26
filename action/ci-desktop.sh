@@ -167,6 +167,10 @@ install_vscode() {
     sudo apt-get update -qq
     sudo apt-get install -y -qq code
     echo "✅ VS Code installed"
+
+    echo "📦 Installing VS Code extensions..."
+    code --install-extension ms-vscode-remote.remote-ssh
+    echo "✅ VS Code Remote SSH extension installed"
 }
 
 configure_chromium() {
