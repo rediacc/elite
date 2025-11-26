@@ -4,8 +4,11 @@
 #
 # Supported environments:
 #   - xfce  (default): Lightweight, fast startup (~300MB)
-#   - gnome: Full-featured, polished UI (~800MB) - requires X11 mode
+#   - gnome: GNOME Flashback with Metacity (~400MB) - classic GNOME experience
 #   - mate:  GNOME 2 fork, stable (~350MB)
+#
+# Note: Full GNOME Shell requires compositing/3D which Xvfb doesn't support.
+#       We use GNOME Flashback instead, which works perfectly with VNC.
 #
 # Architecture:
 #   Runner: Xvfb + [Desktop Environment] + x11vnc + websockify + noVNC
@@ -75,17 +78,20 @@ install_xfce() {
 }
 
 install_gnome() {
-    echo "📦 Installing GNOME desktop environment..."
-    # Minimal GNOME installation for headless/VNC use
-    # Note: GNOME requires X11 mode (not Wayland) for x11vnc compatibility
+    echo "📦 Installing GNOME Flashback desktop environment..."
+    # GNOME Shell requires compositing/3D which Xvfb doesn't support
+    # GNOME Flashback uses Metacity (non-compositing WM) - works with VNC/Xvfb
+    # See: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=776746
     sudo apt-get install -y -qq \
-        gnome-session \
+        gnome-session-flashback \
         gnome-terminal \
-        gnome-shell \
         gnome-control-center \
-        adwaita-icon-theme
-    echo "✅ GNOME installed"
-    echo "⚠️  Note: GNOME will run in X11 mode (required for VNC)"
+        metacity \
+        gnome-panel \
+        adwaita-icon-theme \
+        nautilus
+    echo "✅ GNOME Flashback installed"
+    echo "ℹ️  Using GNOME Flashback (Metacity) for VNC compatibility"
 }
 
 install_mate() {
@@ -114,22 +120,24 @@ start_xfce() {
 }
 
 start_gnome() {
-    echo "🖥️  Starting GNOME desktop (X11 mode)..."
-    # GNOME must run in X11 mode for x11vnc compatibility
-    # --disable-acceleration-check bypasses GPU requirements for virtual display
-    XDG_SESSION_TYPE=x11 \
-    GNOME_SHELL_SESSION_MODE=ubuntu \
-        dbus-run-session -- gnome-session --disable-acceleration-check 2>/tmp/gnome-session.log &
+    echo "🖥️  Starting GNOME Flashback (Metacity) desktop..."
+    # Use gnome-flashback-metacity session which doesn't require compositing
+    # This works with Xvfb unlike full GNOME Shell which needs 3D/EGL
+    export XDG_SESSION_TYPE=x11
+    export XDG_CURRENT_DESKTOP="GNOME-Flashback:GNOME"
+    export XDG_MENU_PREFIX="gnome-flashback-"
+
+    gnome-session --session=gnome-flashback-metacity 2>/tmp/gnome-session.log &
     DE_PID=$!
-    sleep 5  # GNOME needs more time to start
+    sleep 4
 
     if ! kill -0 $DE_PID 2>/dev/null; then
-        echo "❌ Failed to start GNOME desktop session"
+        echo "❌ Failed to start GNOME Flashback session"
         echo "📋 Session log:"
         cat /tmp/gnome-session.log 2>/dev/null || true
         exit 1
     fi
-    echo "✅ GNOME desktop started (PID: $DE_PID)"
+    echo "✅ GNOME Flashback desktop started (PID: $DE_PID)"
 }
 
 start_mate() {
