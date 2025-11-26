@@ -31,7 +31,7 @@ on:
           - '240'
           - '300'
       version:
-        description: 'Version for both Docker images and CLI pip package (e.g., latest, 0.1.67, 0.2.1)'
+        description: 'Version for Docker images, Python CLI (rediacc), and Node.js CLI (rdc)'
         required: false
         default: 'latest'
         type: string
@@ -214,8 +214,9 @@ jobs:
           # Install rediacc CLI (try local /pypi/ first, fallback to public PyPI)
           TAG_VERSION="${TAG:-latest}"
           LOCAL_PYPI="http://localhost/pypi/"
+          LOCAL_NPM="http://localhost/npm/"
 
-          echo "Installing rediacc CLI..."
+          echo "Installing rediacc CLI (Python)..."
           if [ "$TAG_VERSION" = "latest" ]; then
             # Try local first, fallback to PyPI
             if pip install --quiet --find-links "$LOCAL_PYPI" --trusted-host localhost rediacc 2>/dev/null; then
@@ -237,6 +238,33 @@ jobs:
               echo "✓ Installed rediacc (latest) from PyPI"
             fi
           fi
+
+          # Install rdc CLI (Node.js) - try local /npm/ first
+          echo "Installing rdc CLI (Node.js)..."
+          if [ "$TAG_VERSION" = "latest" ]; then
+            # Try local first - find the latest version tarball
+            LOCAL_TGZ=$(curl -s "$LOCAL_NPM" 2>/dev/null | grep -oP 'rediacc-cli-[\d.]+\.tgz' | sort -V | tail -1)
+            if [ -n "$LOCAL_TGZ" ] && npm install -g "${LOCAL_NPM}${LOCAL_TGZ}" 2>/dev/null; then
+              echo "✓ Installed rdc from local /npm/"
+            else
+              echo "Local npm package not found, skipping rdc installation"
+            fi
+          else
+            # Try local with specific version
+            LOCAL_TGZ="rediacc-cli-${TAG_VERSION}.tgz"
+            if curl -sf "${LOCAL_NPM}${LOCAL_TGZ}" -o /dev/null 2>/dev/null && npm install -g "${LOCAL_NPM}${LOCAL_TGZ}" 2>/dev/null; then
+              echo "✓ Installed rdc $TAG_VERSION from local /npm/"
+            else
+              echo "Version $TAG_VERSION not found in local /npm/, skipping rdc installation"
+            fi
+          fi
+
+          # Verify installations
+          echo ""
+          echo "CLI versions installed:"
+          rediacc --version || echo "  rediacc: not installed"
+          rdc --version 2>/dev/null || echo "  rdc: not installed"
+          echo ""
 
           # Register rediacc protocol handler
           rediacc protocol register
