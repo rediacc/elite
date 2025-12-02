@@ -1046,6 +1046,13 @@ switch() {
     # Check if services are running
     if docker ps --format '{{.Names}}' | grep -q "${INSTANCE_NAME:-rediacc}-"; then
         echo ""
+        echo "Pulling new images..."
+        # Force pull new images
+        docker pull --quiet "${DOCKER_REGISTRY}/web:${new_version}"
+        docker pull --quiet "${DOCKER_REGISTRY}/api:${new_version}"
+        docker pull --quiet "${DOCKER_REGISTRY}/bridge:${new_version}"
+
+        echo ""
         echo "Running pre-upgrade cleanup for orphaned tasks..."
         # Run cleanup procedure to handle any in-flight tasks before stopping bridges
         local sql_container="${INSTANCE_NAME:-rediacc}-sql"
@@ -1070,13 +1077,6 @@ switch() {
         else
             echo "⚠ SQL container not running, skipping pre-upgrade cleanup"
         fi
-
-        echo ""
-        echo "Pulling new images..."
-        # Force pull new images
-        docker pull --quiet "${DOCKER_REGISTRY}/web:${new_version}"
-        docker pull --quiet "${DOCKER_REGISTRY}/api:${new_version}"
-        docker pull --quiet "${DOCKER_REGISTRY}/bridge:${new_version}"
 
         echo ""
         echo "Restarting services with new version..."
