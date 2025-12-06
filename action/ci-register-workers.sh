@@ -26,7 +26,7 @@ PROVIDER="${VM_PROVIDER:-${PROVIDER:-kvm}}"
 WORKER_IPS="${VM_WORKER_IPS:-${WORKER_IPS}}"
 BRIDGE_IP="${VM_BRIDGE_IP:-${BRIDGE_IP}}"
 MACHINE_USER="${VM_USR:-runner}"
-MACHINE_DATASTORE="/mnt/datastore"
+MACHINE_DATASTORE="/mnt/rediacc"
 
 # Validate required inputs
 if [ -z "$WORKER_IPS" ]; then
