@@ -211,7 +211,8 @@ jobs:
           timeout 60 bash -c 'until ./go health; do sleep 2; done'
           echo "✓ Middleware is healthy"
 
-          # Install rediacc CLI (try local /pypi/ first, fallback to public PyPI)
+          # Install rediacc CLI from local /pypi/ (embedded in web image)
+          # Note: rediacc is NOT published to public PyPI - must use embedded package
           TAG_VERSION="${TAG:-latest}"
           LOCAL_PYPI="http://localhost/pypi/"
           LOCAL_NPM="http://localhost/npm/"
@@ -219,26 +220,45 @@ jobs:
           echo "Installing system dependencies for rediacc CLI..."
           sudo apt-get install -y python3-tk
 
+          # Check if CLI packages are embedded in the web image
+          echo "Checking for embedded CLI packages..."
+          if ! curl -sf "http://localhost/cli-packages.json" > /dev/null 2>&1; then
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "ERROR: CLI packages not embedded in web image"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo ""
+            echo "The web Docker image does not have CLI packages embedded."
+            echo "This happens when the image was built without first building"
+            echo "the PyPI package."
+            echo ""
+            echo "To fix, rebuild the images with:"
+            echo "  ./go build pypi    # Build Python CLI package"
+            echo "  ./go build prod    # Build Docker images (embeds CLI packages)"
+            echo ""
+            echo "Then push the updated images to the registry."
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            exit 1
+          fi
+
           echo "Installing rediacc CLI (Python)..."
           if [ "$TAG_VERSION" = "latest" ]; then
-            # Try local first, fallback to PyPI
             if pip install --quiet --find-links "$LOCAL_PYPI" --trusted-host localhost rediacc 2>/dev/null; then
               echo "✓ Installed rediacc from local /pypi/"
             else
-              echo "Local package not found, installing from PyPI..."
-              pip install --quiet rediacc
-              echo "✓ Installed rediacc from PyPI"
+              echo "ERROR: Failed to install rediacc from local /pypi/"
+              echo "Check that the web image has CLI packages embedded."
+              exit 1
             fi
           else
-            # Try local with version, fallback to PyPI
             if pip install --quiet --find-links "$LOCAL_PYPI" --trusted-host localhost "rediacc==$TAG_VERSION" 2>/dev/null; then
               echo "✓ Installed rediacc $TAG_VERSION from local /pypi/"
-            elif pip install --quiet "rediacc==$TAG_VERSION" 2>/dev/null; then
-              echo "✓ Installed rediacc $TAG_VERSION from PyPI"
+            elif pip install --quiet --find-links "$LOCAL_PYPI" --trusted-host localhost rediacc 2>/dev/null; then
+              echo "⚠ Version $TAG_VERSION not found, installed latest from local /pypi/"
             else
-              echo "Version $TAG_VERSION not found, installing latest from PyPI..."
-              pip install --quiet rediacc
-              echo "✓ Installed rediacc (latest) from PyPI"
+              echo "ERROR: Failed to install rediacc from local /pypi/"
+              echo "Check that the web image has CLI packages embedded."
+              exit 1
             fi
           fi
 

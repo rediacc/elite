@@ -55,7 +55,8 @@ echo "  Bridge IP: $BRIDGE_IP"
 echo "  API URL: $SYSTEM_API_URL"
 echo ""
 
-# Install rediacc CLI (try local /pypi/ first, fallback to public PyPI)
+# Install rediacc CLI from local /pypi/ (embedded in web image)
+# Note: rediacc is NOT published to public PyPI - must use embedded package
 # Skip installation if REDIACC_SKIP_CLI_INSTALL is set (e.g., when testing local CLI changes)
 LOCAL_PYPI="http://localhost/pypi/"
 
@@ -67,18 +68,32 @@ if [ "$REDIACC_SKIP_CLI_INSTALL" = "true" ]; then
     fi
     echo "✓ Using existing rediacc CLI installation"
 elif ! command -v rediacc &> /dev/null; then
+    # Check if CLI packages are embedded in the web image
+    echo "Checking for embedded CLI packages..."
+    if ! curl -sf "http://localhost/cli-packages.json" > /dev/null 2>&1; then
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "ERROR: CLI packages not embedded in web image"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo ""
+        echo "The web Docker image does not have CLI packages embedded."
+        echo "Rebuild the images with:"
+        echo "  ./go build pypi    # Build Python CLI package"
+        echo "  ./go build prod    # Build Docker images (embeds CLI packages)"
+        echo ""
+        exit 1
+    fi
+
     # Derive CLI version from TAG environment variable (used for Docker images)
     # TAG format: 0.1.67, 0.2.1, or latest (no v prefix)
     CLI_VERSION="${TAG:-latest}"
 
     if [ "$CLI_VERSION" = "latest" ]; then
-        # Try local first, fallback to PyPI
         if pip install --quiet --find-links "$LOCAL_PYPI" --trusted-host localhost rediacc 2>/dev/null; then
             echo "✓ Installed rediacc from local /pypi/"
         else
-            echo "Local package not found, installing from PyPI..."
-            pip install --quiet rediacc
-            echo "✓ Installed rediacc from PyPI"
+            echo "ERROR: Failed to install rediacc from local /pypi/"
+            exit 1
         fi
     else
         # If version starts with comparison operator (>=, ==, ~=, etc.), use as-is
@@ -86,25 +101,22 @@ elif ! command -v rediacc &> /dev/null; then
         case "$CLI_VERSION" in
             [\>\<\=\~\!]*)
                 echo "Installing rediacc CLI with constraint: $CLI_VERSION..."
-                # Try local first with constraint
                 if pip install --quiet --find-links "$LOCAL_PYPI" --trusted-host localhost "rediacc${CLI_VERSION}" 2>/dev/null; then
                     echo "✓ Installed from local /pypi/"
                 else
-                    pip install --quiet "rediacc${CLI_VERSION}"
-                    echo "✓ Installed from PyPI"
+                    echo "ERROR: Failed to install rediacc${CLI_VERSION} from local /pypi/"
+                    exit 1
                 fi
                 ;;
             *)
                 echo "Installing rediacc CLI version: $CLI_VERSION..."
-                # Try local first, then PyPI, then latest as fallback
                 if pip install --quiet --find-links "$LOCAL_PYPI" --trusted-host localhost "rediacc==$CLI_VERSION" 2>/dev/null; then
                     echo "✓ Installed rediacc $CLI_VERSION from local /pypi/"
-                elif pip install --quiet "rediacc==$CLI_VERSION" 2>/dev/null; then
-                    echo "✓ Installed rediacc $CLI_VERSION from PyPI"
+                elif pip install --quiet --find-links "$LOCAL_PYPI" --trusted-host localhost rediacc 2>/dev/null; then
+                    echo "⚠ Version $CLI_VERSION not found, installed latest from local /pypi/"
                 else
-                    echo "⚠ Version $CLI_VERSION not available, falling back to latest..."
-                    pip install --quiet rediacc
-                    echo "✓ Installed rediacc (latest) from PyPI"
+                    echo "ERROR: Failed to install rediacc from local /pypi/"
+                    exit 1
                 fi
                 ;;
         esac
