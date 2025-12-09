@@ -187,7 +187,7 @@ _register_machine() {
         --teamName "${SYSTEM_DEFAULT_TEAM_NAME}" \
         --bridgeName "${SYSTEM_DEFAULT_BRIDGE_NAME}" \
         --machineName "$machine_name" \
-        --machineVault "$machine_vault" 2>&1 | grep -q "Successfully executed"; then
+        --vaultContent "$machine_vault" 2>&1 | grep -q "Successfully executed"; then
         echo "✓ Registered machine: $machine_name ($ip)"
         return 0
     else
