@@ -366,7 +366,7 @@ jobs:
           OPS_PATH="${OPS_REPO_PATH:-/home/runner/work/_actions/rediacc/ops/main}"
           cd "$OPS_PATH" || exit 0
 
-          export SDK_HOME="$(pwd)"
+          export OPS_HOME="$(pwd)"
           source scripts/init.sh 2>/dev/null || true
 
           # Create staging directory for logs
@@ -409,9 +409,9 @@ jobs:
           echo "────────────────────────────────────────────────────────────────"
 
           # Check if local staging files exist from orch_copy_back_files
-          if [ -f "$SDK_HOME/staging/rediacc_log.txt" ]; then
+          if [ -f "$OPS_HOME/staging/rediacc_log.txt" ]; then
             echo "📄 Local Staging Log (already copied):"
-            cat "$SDK_HOME/staging/rediacc_log.txt"
+            cat "$OPS_HOME/staging/rediacc_log.txt"
           fi
 
           echo ""
@@ -769,25 +769,3 @@ jobs:
           echo "   • Workflow status: ${{ job.status }}"
           echo "   • Completion time: $(date '+%Y-%m-%d %H:%M:%S')"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-  cleanup-vms:
-    name: Cleanup VM Infrastructure
-    needs: [run-services]
-    if: always() && (github.event.inputs.enable-vms == 'true' || (github.event.inputs.enable-vms == '' && true))
-    runs-on: ubuntu-latest
-
-    # Need to redefine defaults here since job-level env from run-services isn't accessible
-    env:
-      DEFAULT_VM_PROVIDER: 'kvm'
-
-    steps:
-      - name: Checkout SDK Repository
-        uses: actions/checkout@v4
-        with:
-          repository: rediacc/ops
-          ref: main
-
-      - name: Cleanup VMs
-        uses: ./.github/actions/cleanup-vms
-        with:
-          provider: ${{ github.event.inputs.vm-provider || env.DEFAULT_VM_PROVIDER }}
