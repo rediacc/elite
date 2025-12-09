@@ -201,6 +201,7 @@ jobs:
         if: (github.event.inputs.enable-vms || env.DEFAULT_ENABLE_VMS) == 'true'
         env:
           TAG: ${{ env.TAG }}
+          DESKTOP_ENVIRONMENT: ${{ github.event.inputs.desktop-environment || env.DEFAULT_DESKTOP_ENVIRONMENT }}
         run: |
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "🔑 Extracting SSH Keys from Middleware"
@@ -291,8 +292,13 @@ jobs:
           rdc --version 2>/dev/null || echo "  rdc: not installed"
           echo ""
 
-          # Register rediacc protocol handler
-          rediacc protocol register
+          # Register rediacc protocol handler (only when desktop environment is enabled)
+          if [ "$DESKTOP_ENVIRONMENT" != "none" ]; then
+            echo "Registering rediacc protocol handler..."
+            rediacc protocol register
+          else
+            echo "Skipping protocol registration (no desktop environment)"
+          fi
 
           # Source environment for credentials
           source action/ci-env.sh
