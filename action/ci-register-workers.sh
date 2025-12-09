@@ -254,7 +254,7 @@ _queue_setup_task() {
         --teamName "$SYSTEM_DEFAULT_TEAM_NAME" \
         --machineName "$machine_name" \
         --bridgeName "${SYSTEM_DEFAULT_BRIDGE_NAME}" \
-        --queueVault "$setup_vault" \
+        --vaultContent "$setup_vault" \
         --priority 1 2>&1 | grep -q "Successfully executed"; then
         echo "✓ Queued setup task for: $machine_name"
         return 0
