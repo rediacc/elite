@@ -122,8 +122,10 @@ elif ! command -v rediacc &> /dev/null; then
         esac
     fi
 
-    # Register rediacc protocol handler
-    rediacc protocol register
+    # Register rediacc protocol handler (skip in headless CI environments)
+    if [ "${DESKTOP_ENV:-none}" != "none" ]; then
+        rediacc protocol register
+    fi
 else
     echo "✓ rediacc CLI already installed"
 fi
