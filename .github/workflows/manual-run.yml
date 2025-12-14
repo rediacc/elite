@@ -307,9 +307,6 @@ jobs:
           # Set API URL explicitly (services run on localhost)
           export SYSTEM_API_URL="http://localhost/api"
 
-          # Set master password for vault decryption (required for CLI vault operations)
-          export REDIACC_MASTER_PASSWORD="$SYSTEM_ADMIN_PASSWORD"
-
           # Login to middleware (Console CLI syntax)
           echo "Logging in to middleware..."
           echo "API URL: $SYSTEM_API_URL"
