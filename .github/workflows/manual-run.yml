@@ -307,6 +307,9 @@ jobs:
           # Set API URL explicitly (services run on localhost)
           export SYSTEM_API_URL="http://localhost/api"
 
+          # Set master password for vault decryption (required for CLI vault operations)
+          export REDIACC_MASTER_PASSWORD="$SYSTEM_ADMIN_PASSWORD"
+
           # Login to middleware (Console CLI syntax)
           echo "Logging in to middleware..."
           echo "API URL: $SYSTEM_API_URL"
@@ -319,7 +322,7 @@ jobs:
           echo "Fetching team vault..."
           TEAM_VAULT=$(rdc team list -o json 2>&1 | sed -n '/^\[/,$p' | \
             jq -r --arg team "$SYSTEM_DEFAULT_TEAM_NAME" \
-            '.[] | select(.teamName == $team or .TeamName == $team) | (.vaultContent // .VaultContent // "{}")')
+            '.[] | select(.teamName == $team or .TeamName == $team) | (.vaultContent // .VaultContent // "{}") | fromjson')
 
           # Extract and decode SSH keys
           echo "Extracting SSH keys from vault..."
