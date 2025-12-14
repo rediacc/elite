@@ -167,19 +167,11 @@ _register_machine() {
         }')
 
     # Register machine with middleware (Console CLI syntax)
-    # Note: machine create doesn't support --vault, so we create first then update vault
     if _run_cli_command machine create "$machine_name" \
         -t "${SYSTEM_DEFAULT_TEAM_NAME}" \
-        -b "${SYSTEM_DEFAULT_BRIDGE_NAME}" 2>&1 | grep -qi "created\|success"; then
+        -b "${SYSTEM_DEFAULT_BRIDGE_NAME}" \
+        --vault "$machine_vault" 2>&1 | grep -qi "created\|success"; then
         echo "✓ Registered machine: $machine_name ($ip)"
-
-        # Update machine vault after creation
-        if ! _run_cli_command machine vault update "$machine_name" \
-            -t "${SYSTEM_DEFAULT_TEAM_NAME}" \
-            --vault "$machine_vault" \
-            --vault-version 1 2>&1 | grep -qi "updated\|success"; then
-            echo "  ⚠ Could not update vault for $machine_name"
-        fi
         return 0
     else
         echo "⚠ Could not register machine: $machine_name (may already exist)"
