@@ -3,6 +3,7 @@
 # Discovers infrastructure (VMs, bare metal, etc.) and registers as machines
 
 set -e
+set -o pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ELITE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -55,19 +56,19 @@ echo "  Bridge IP: $BRIDGE_IP"
 echo "  API URL: $SYSTEM_API_URL"
 echo ""
 
-# Install rediacc CLI from local /pypi/ (embedded in web image)
-# Note: rediacc is NOT published to public PyPI - must use embedded package
+# Install rdc CLI from local /npm/ (embedded in web image)
+# Note: rdc is NOT published to public npm - must use embedded package
 # Skip installation if REDIACC_SKIP_CLI_INSTALL is set (e.g., when testing local CLI changes)
-LOCAL_PYPI="http://localhost/pypi/"
+LOCAL_NPM="http://localhost/npm/"
 
 if [ "$REDIACC_SKIP_CLI_INSTALL" = "true" ]; then
     echo "⚠ Skipping CLI installation (REDIACC_SKIP_CLI_INSTALL=true)"
-    if ! command -v rediacc &> /dev/null; then
-        echo "Error: REDIACC_SKIP_CLI_INSTALL is set but rediacc CLI is not installed"
+    if ! command -v rdc &> /dev/null; then
+        echo "Error: REDIACC_SKIP_CLI_INSTALL is set but rdc CLI is not installed"
         exit 1
     fi
-    echo "✓ Using existing rediacc CLI installation"
-elif ! command -v rediacc &> /dev/null; then
+    echo "✓ Using existing rdc CLI installation"
+elif ! command -v rdc &> /dev/null; then
     # Check if CLI packages are embedded in the web image
     echo "Checking for embedded CLI packages..."
     if ! curl -sf "http://localhost/cli-packages.json" > /dev/null 2>&1; then
@@ -78,61 +79,42 @@ elif ! command -v rediacc &> /dev/null; then
         echo ""
         echo "The web Docker image does not have CLI packages embedded."
         echo "Rebuild the images with:"
-        echo "  ./go build pypi    # Build Python CLI package"
+        echo "  ./go build npm     # Build Node.js CLI package"
         echo "  ./go build prod    # Build Docker images (embeds CLI packages)"
         echo ""
         exit 1
     fi
 
-    # Derive CLI version from TAG environment variable (used for Docker images)
-    # TAG format: 0.1.67, 0.2.1, or latest (no v prefix)
+    # Install rdc CLI from local npm mirror
+    echo "Installing rdc CLI (Node.js)..."
     CLI_VERSION="${TAG:-latest}"
-
     if [ "$CLI_VERSION" = "latest" ]; then
-        if pip install --quiet --find-links "$LOCAL_PYPI" --trusted-host localhost rediacc 2>/dev/null; then
-            echo "✓ Installed rediacc from local /pypi/"
-        else
-            echo "ERROR: Failed to install rediacc from local /pypi/"
-            exit 1
-        fi
+        LOCAL_TGZ="${LOCAL_NPM}rediacc-cli-latest.tgz"
     else
-        # If version starts with comparison operator (>=, ==, ~=, etc.), use as-is
-        # Otherwise, add == for exact version match
-        case "$CLI_VERSION" in
-            [\>\<\=\~\!]*)
-                echo "Installing rediacc CLI with constraint: $CLI_VERSION..."
-                if pip install --quiet --find-links "$LOCAL_PYPI" --trusted-host localhost "rediacc${CLI_VERSION}" 2>/dev/null; then
-                    echo "✓ Installed from local /pypi/"
-                else
-                    echo "ERROR: Failed to install rediacc${CLI_VERSION} from local /pypi/"
-                    exit 1
-                fi
-                ;;
-            *)
-                echo "Installing rediacc CLI version: $CLI_VERSION..."
-                if pip install --quiet --find-links "$LOCAL_PYPI" --trusted-host localhost "rediacc==$CLI_VERSION" 2>/dev/null; then
-                    echo "✓ Installed rediacc $CLI_VERSION from local /pypi/"
-                elif pip install --quiet --find-links "$LOCAL_PYPI" --trusted-host localhost rediacc 2>/dev/null; then
-                    echo "⚠ Version $CLI_VERSION not found, installed latest from local /pypi/"
-                else
-                    echo "ERROR: Failed to install rediacc from local /pypi/"
-                    exit 1
-                fi
-                ;;
-        esac
+        LOCAL_TGZ="${LOCAL_NPM}rediacc-cli-${CLI_VERSION}.tgz"
+        # Fallback to latest if specific version not found
+        if ! curl -sf "$LOCAL_TGZ" -o /dev/null 2>/dev/null; then
+            echo "⚠ Version $CLI_VERSION not found, using latest"
+            LOCAL_TGZ="${LOCAL_NPM}rediacc-cli-latest.tgz"
+        fi
     fi
 
-    # Register rediacc protocol handler (skip in headless CI environments)
-    if [ "${DESKTOP_ENV:-none}" != "none" ]; then
-        rediacc protocol register
+    install_output=$(npm install -g "$LOCAL_TGZ" 2>&1)
+    install_status=$?
+    if [ $install_status -eq 0 ]; then
+        echo "✓ Installed rdc from local /npm/"
+    else
+        echo "ERROR: Failed to install rdc from local /npm/"
+        echo "$install_output"
+        exit 1
     fi
 else
-    echo "✓ rediacc CLI already installed"
+    echo "✓ rdc CLI already installed"
 fi
 
 # Helper function to run CLI command
 _run_cli_command() {
-    rediacc "$@"
+    rdc "$@"
 }
 
 # Helper function to generate machine name from IP
@@ -184,12 +166,11 @@ _register_machine() {
             ssh_password: ""
         }')
 
-    # Register machine with middleware
-    if _run_cli_command CreateMachine \
-        --teamName "${SYSTEM_DEFAULT_TEAM_NAME}" \
-        --bridgeName "${SYSTEM_DEFAULT_BRIDGE_NAME}" \
-        --machineName "$machine_name" \
-        --vaultContent "$machine_vault" 2>&1 | grep -q "Successfully executed"; then
+    # Register machine with middleware (Console CLI syntax)
+    if _run_cli_command machine create "$machine_name" \
+        -t "${SYSTEM_DEFAULT_TEAM_NAME}" \
+        -b "${SYSTEM_DEFAULT_BRIDGE_NAME}" \
+        --vault "$machine_vault" 2>&1 | grep -qi "created\|success"; then
         echo "✓ Registered machine: $machine_name ($ip)"
         return 0
     else
@@ -251,13 +232,14 @@ _queue_setup_task() {
             }
         }')
 
-    # Queue setup task
-    if _run_cli_command CreateQueueItem \
-        --teamName "$SYSTEM_DEFAULT_TEAM_NAME" \
-        --machineName "$machine_name" \
-        --bridgeName "${SYSTEM_DEFAULT_BRIDGE_NAME}" \
-        --vaultContent "$setup_vault" \
-        --priority 1 2>&1 | grep -q "Successfully executed"; then
+    # Queue setup task (Console CLI syntax)
+    if _run_cli_command queue create \
+        -f "setup" \
+        -t "$SYSTEM_DEFAULT_TEAM_NAME" \
+        -m "$machine_name" \
+        -b "${SYSTEM_DEFAULT_BRIDGE_NAME}" \
+        --vault "$setup_vault" \
+        -p 1 2>&1 | grep -qi "created\|task.*id\|success"; then
         echo "✓ Queued setup task for: $machine_name"
         return 0
     else
@@ -269,11 +251,11 @@ _queue_setup_task() {
 echo "Step 1: Logging in to middleware"
 echo "---------------------------------"
 
-# Login to middleware (suppress output to avoid password leakage)
-if ! _run_cli_command auth login --endpoint "$SYSTEM_API_URL" --email "$SYSTEM_ADMIN_EMAIL" --password "$SYSTEM_ADMIN_PASSWORD" >/dev/null 2>&1; then
+# Login to middleware (Console CLI syntax - suppress output to avoid password leakage)
+if ! _run_cli_command auth login --endpoint "$SYSTEM_API_URL" -e "$SYSTEM_ADMIN_EMAIL" -p "$SYSTEM_ADMIN_PASSWORD" >/dev/null 2>&1; then
     echo "Error: Could not login to middleware"
     echo "Retrying with verbose output..."
-    _run_cli_command auth login --endpoint "$SYSTEM_API_URL" --email "$SYSTEM_ADMIN_EMAIL" --password "$SYSTEM_ADMIN_PASSWORD"
+    _run_cli_command auth login --endpoint "$SYSTEM_API_URL" -e "$SYSTEM_ADMIN_EMAIL" -p "$SYSTEM_ADMIN_PASSWORD"
     exit 1
 fi
 echo "✓ Logged in successfully"
@@ -286,37 +268,39 @@ echo ""
 echo "Step 2: Fetching vault data for setup tasks"
 echo "---------------------------------------------"
 
-# Fetch company credential and vault data
+# Fetch company credential and vault data (Console CLI syntax)
 echo "Fetching company vault..."
-COMPANY_RESPONSE=$(_run_cli_command GetCompanyVault --output json)
+COMPANY_RESPONSE=$(_run_cli_command company vault get -o json 2>&1 | sed -n '/^{/,$p')
+CLI_EXIT_CODE="${PIPESTATUS[0]}"
 
-if [ $? -ne 0 ]; then
+if [ "$CLI_EXIT_CODE" -ne 0 ] || [ -z "$COMPANY_RESPONSE" ]; then
     echo "Warning: Could not fetch company vault data"
     echo "Setup tasks will not be queued"
     SKIP_SETUP=true
 else
-    # Extract company credential (becomes COMPANY_ID)
-    COMPANY_CREDENTIAL=$(echo "$COMPANY_RESPONSE" | jq -r '.data.result[0].companyCredential // .data.result[0].CompanyCredential')
-    COMPANY_VAULT_STR=$(echo "$COMPANY_RESPONSE" | jq -r '.data.result[0].vaultContent // .data.result[0].VaultContent')
+    # Console CLI returns: { vault: string, vaultVersion: number, companyCredential: string }
+    COMPANY_CREDENTIAL=$(echo "$COMPANY_RESPONSE" | jq -r '.companyCredential // empty')
+    COMPANY_VAULT_STR=$(echo "$COMPANY_RESPONSE" | jq -r '.vault // "{}"')
     echo "✓ Company credential: ${COMPANY_CREDENTIAL:0:8}..."
 
-    # Fetch team vault data
+    # Fetch team vault data (Console CLI returns array directly)
     echo "Fetching team vault..."
-    TEAMS_RESPONSE=$(_run_cli_command GetCompanyTeams --output json)
+    TEAMS_RESPONSE=$(_run_cli_command team list -o json 2>&1 | sed -n '/^\[/,$p')
+    CLI_EXIT_CODE="${PIPESTATUS[0]}"
 
-    if [ $? -ne 0 ]; then
+    if [ "$CLI_EXIT_CODE" -ne 0 ] || [ -z "$TEAMS_RESPONSE" ]; then
         echo "Warning: Could not fetch teams data"
         echo "Setup tasks will not be queued"
         SKIP_SETUP=true
     else
-        # Find the default team and extract its vault
+        # Console CLI returns array directly (no .data.result wrapper)
         TEAM_VAULT_STR=$(echo "$TEAMS_RESPONSE" | jq -r --arg team "$SYSTEM_DEFAULT_TEAM_NAME" '
-            .data.result[] | select(.teamName == $team or .TeamName == $team) | (.vaultContent // .VaultContent)
+            .[] | select(.teamName == $team or .TeamName == $team) | (.vaultContent // .VaultContent // "{}")
         ')
 
         # Parse vaults and add COMPANY_ID
-        COMPANY_VAULT_JSON=$(echo "$COMPANY_VAULT_STR" | jq --arg id "$COMPANY_CREDENTIAL" '. + {COMPANY_ID: $id}')
-        TEAM_VAULT_JSON=$(echo "$TEAM_VAULT_STR" | jq '.')
+        COMPANY_VAULT_JSON=$(echo "$COMPANY_VAULT_STR" | jq --arg id "$COMPANY_CREDENTIAL" '. + {COMPANY_ID: $id}' 2>/dev/null || echo '{}')
+        TEAM_VAULT_JSON=$(echo "$TEAM_VAULT_STR" | jq '.' 2>/dev/null || echo '{}')
         echo "✓ Vault data fetched successfully"
     fi
 fi
