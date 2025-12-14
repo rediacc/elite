@@ -3,6 +3,7 @@
 # Discovers infrastructure (VMs, bare metal, etc.) and registers as machines
 
 set -e
+set -o pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ELITE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -86,12 +87,25 @@ elif ! command -v rdc &> /dev/null; then
 
     # Install rdc CLI from local npm mirror
     echo "Installing rdc CLI (Node.js)..."
-    LOCAL_TGZ="${LOCAL_NPM}rediacc-cli-latest.tgz"
+    CLI_VERSION="${TAG:-latest}"
+    if [ "$CLI_VERSION" = "latest" ]; then
+        LOCAL_TGZ="${LOCAL_NPM}rediacc-cli-latest.tgz"
+    else
+        LOCAL_TGZ="${LOCAL_NPM}rediacc-cli-${CLI_VERSION}.tgz"
+        # Fallback to latest if specific version not found
+        if ! curl -sf "$LOCAL_TGZ" -o /dev/null 2>/dev/null; then
+            echo "⚠ Version $CLI_VERSION not found, using latest"
+            LOCAL_TGZ="${LOCAL_NPM}rediacc-cli-latest.tgz"
+        fi
+    fi
 
-    if npm install -g "$LOCAL_TGZ" 2>/dev/null; then
+    install_output=$(npm install -g "$LOCAL_TGZ" 2>&1)
+    install_status=$?
+    if [ $install_status -eq 0 ]; then
         echo "✓ Installed rdc from local /npm/"
     else
         echo "ERROR: Failed to install rdc from local /npm/"
+        echo "$install_output"
         exit 1
     fi
 else
@@ -257,8 +271,9 @@ echo "---------------------------------------------"
 # Fetch company credential and vault data (Console CLI syntax)
 echo "Fetching company vault..."
 COMPANY_RESPONSE=$(_run_cli_command company vault get -o json 2>&1 | sed -n '/^{/,$p')
+CLI_EXIT_CODE="${PIPESTATUS[0]}"
 
-if [ $? -ne 0 ] || [ -z "$COMPANY_RESPONSE" ]; then
+if [ "$CLI_EXIT_CODE" -ne 0 ] || [ -z "$COMPANY_RESPONSE" ]; then
     echo "Warning: Could not fetch company vault data"
     echo "Setup tasks will not be queued"
     SKIP_SETUP=true
@@ -271,8 +286,9 @@ else
     # Fetch team vault data (Console CLI returns array directly)
     echo "Fetching team vault..."
     TEAMS_RESPONSE=$(_run_cli_command team list -o json 2>&1 | sed -n '/^\[/,$p')
+    CLI_EXIT_CODE="${PIPESTATUS[0]}"
 
-    if [ $? -ne 0 ] || [ -z "$TEAMS_RESPONSE" ]; then
+    if [ "$CLI_EXIT_CODE" -ne 0 ] || [ -z "$TEAMS_RESPONSE" ]; then
         echo "Warning: Could not fetch teams data"
         echo "Setup tasks will not be queued"
         SKIP_SETUP=true
