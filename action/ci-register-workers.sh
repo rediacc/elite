@@ -167,10 +167,18 @@ _register_machine() {
         }')
 
     # Register machine with middleware (Console CLI syntax)
-    if _run_cli_command machine create "$machine_name" \
+    local output
+    output=$(_run_cli_command machine create "$machine_name" \
         -t "${SYSTEM_DEFAULT_TEAM_NAME}" \
         -b "${SYSTEM_DEFAULT_BRIDGE_NAME}" \
-        --vault "$machine_vault" 2>&1 | grep -qi "created\|success"; then
+        --vault "$machine_vault" 2>&1)
+    local exit_code=$?
+
+    # Show output for debugging
+    echo "  CLI output: $output"
+    echo "  Exit code: $exit_code"
+
+    if echo "$output" | grep -qi "created\|success"; then
         echo "✓ Registered machine: $machine_name ($ip)"
         return 0
     else
