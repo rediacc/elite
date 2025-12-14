@@ -49,6 +49,9 @@ else
     export SYSTEM_API_URL="http://localhost/api"
 fi
 
+# Set master password for non-interactive vault encryption
+export REDIACC_MASTER_PASSWORD="$SYSTEM_ADMIN_PASSWORD"
+
 echo "Configuration:"
 echo "  Provider: $PROVIDER"
 echo "  Worker IPs: $WORKER_IPS"
