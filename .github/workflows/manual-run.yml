@@ -1,10 +1,10 @@
 name: Service Run
 
-run-name: "${{ github.event.inputs.run-name || (github.event_name == 'workflow_dispatch' && 'Manual Service Run') || (github.event_name == 'push' && 'CI Service Run') || 'Scheduled Service Run' }}"
+run-name: "${{ github.event.inputs.run-name || (github.event_name == 'workflow_dispatch' && 'Manual Service Run') || (github.event_name == 'push' && 'CI Service Run') || (github.event_name == 'pull_request' && format('PR #{0} Service Run', github.event.pull_request.number)) || 'Scheduled Service Run' }}"
 
 # Run services for a specified duration
 # - Manual: workflow_dispatch with custom parameters
-# - Automatic: on push and daily schedule (uses same defaults as manual)
+# - Automatic: on push, pull_request, and daily schedule (uses same defaults as manual)
 on:
   workflow_dispatch:
     inputs:
@@ -125,6 +125,10 @@ on:
     branches:
       - main
 
+  pull_request:
+    branches:
+      - main
+
   schedule:
     # Run once daily at 00:00 UTC
     - cron: '0 0 * * *'
@@ -231,10 +235,10 @@ jobs:
             echo ""
             echo "The web Docker image does not have CLI packages embedded."
             echo "This happens when the image was built without first building"
-            echo "the PyPI package."
+            echo "the npm package."
             echo ""
             echo "To fix, rebuild the images with:"
-            echo "  ./go build pypi    # Build Python CLI package"
+            echo "  ./go build npm     # Build Node.js CLI package"
             echo "  ./go build prod    # Build Docker images (embeds CLI packages)"
             echo ""
             echo "Then push the updated images to the registry."
@@ -242,6 +246,8 @@ jobs:
             exit 1
           fi
 
+          # Install rediacc CLI (Python) - required for other software dependencies
+          # Note: rediacc is NOT published to public PyPI - must use embedded package
           echo "Installing rediacc CLI (Python)..."
           if [ "$TAG_VERSION" = "latest" ]; then
             if pip install --quiet --find-links "$LOCAL_PYPI" --trusted-host localhost rediacc 2>/dev/null; then
@@ -272,33 +278,28 @@ jobs:
             if npm install -g "$LOCAL_TGZ_LATEST" 2>/dev/null; then
               echo "✓ Installed rdc from local /npm/"
             else
-              echo "⚠ Failed to install rdc from local /npm/"
+              echo "ERROR: Failed to install rdc from local /npm/"
+              exit 1
             fi
           else
-            echo "⚠ npm package not found at $LOCAL_TGZ_LATEST"
+            echo "ERROR: npm package not found at $LOCAL_TGZ_LATEST"
             echo "  The web image may not have npm packages embedded."
-            echo "  Rebuild with: ./go build prod"
+            echo "  Rebuild with: ./go build npm && ./go build prod"
+            exit 1
           fi
 
           # Show CLI packages metadata if available
           echo ""
           echo "CLI packages info:"
-          curl -sf "http://localhost/cli-packages.json" | jq -r '"  Python: \(.packages.python.version) (\(.packages.python.filename))\n  Node.js: \(.packages.nodejs.version) (\(.packages.nodejs.filename))"' 2>/dev/null || echo "  (metadata not available)"
+          curl -sf "http://localhost/cli-packages.json" | jq -r '"  Python:  \(.packages.python.version) (\(.packages.python.filename))"' 2>/dev/null || echo "  Python: (metadata not available)"
+          curl -sf "http://localhost/cli-packages.json" | jq -r '"  Node.js: \(.packages.nodejs.version) (\(.packages.nodejs.filename))"' 2>/dev/null || echo "  Node.js: (metadata not available)"
 
-          # Verify installations
+          # Verify installation
           echo ""
           echo "CLI versions installed:"
-          rediacc --version || echo "  rediacc: not installed"
+          rediacc --version 2>/dev/null || echo "  rediacc: not installed"
           rdc --version 2>/dev/null || echo "  rdc: not installed"
           echo ""
-
-          # Register rediacc protocol handler (only when desktop environment is enabled)
-          if [ "$DESKTOP_ENVIRONMENT" != "none" ]; then
-            echo "Registering rediacc protocol handler..."
-            rediacc protocol register
-          else
-            echo "Skipping protocol registration (no desktop environment)"
-          fi
 
           # Source environment for credentials
           source action/ci-env.sh
@@ -306,19 +307,19 @@ jobs:
           # Set API URL explicitly (services run on localhost)
           export SYSTEM_API_URL="http://localhost/api"
 
-          # Login to middleware
+          # Login to middleware (Console CLI syntax)
           echo "Logging in to middleware..."
           echo "API URL: $SYSTEM_API_URL"
-          rediacc auth login \
+          rdc auth login \
             --endpoint "$SYSTEM_API_URL" \
-            --email "$SYSTEM_ADMIN_EMAIL" \
-            --password "$SYSTEM_ADMIN_PASSWORD"
+            -e "$SYSTEM_ADMIN_EMAIL" \
+            -p "$SYSTEM_ADMIN_PASSWORD"
 
-          # Fetch team vault
+          # Fetch team vault (Console CLI returns array directly)
           echo "Fetching team vault..."
-          TEAM_VAULT=$(rediacc GetCompanyTeams --output json | \
+          TEAM_VAULT=$(rdc team list -o json 2>&1 | sed -n '/^\[/,$p' | \
             jq -r --arg team "$SYSTEM_DEFAULT_TEAM_NAME" \
-            '.data.result[] | select(.teamName == $team or .TeamName == $team) | .vaultContent')
+            '.[] | select(.teamName == $team or .TeamName == $team) | (.vaultContent // .VaultContent // "{}")')
 
           # Extract and decode SSH keys
           echo "Extracting SSH keys from vault..."
@@ -336,7 +337,7 @@ jobs:
           ssh-keygen -lf ~/.ssh/id_rsa.pub
 
           # Logout
-          rediacc auth logout
+          rdc auth logout
 
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
