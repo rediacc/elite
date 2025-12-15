@@ -317,20 +317,75 @@ jobs:
 
           # Fetch team vault (Console CLI returns array directly)
           echo "Fetching team vault..."
-          TEAM_VAULT=$(rdc team list -o json 2>&1 | sed -n '/^\[/,$p' | \
-            jq -r --arg team "$SYSTEM_DEFAULT_TEAM_NAME" \
-            '.[] | select(.teamName == $team or .TeamName == $team) | (.vaultContent // .VaultContent // "{}") | fromjson')
+          TEAM_LIST_OUTPUT=$(rdc team list -o json 2>&1)
 
-          # Extract and decode SSH keys
+          # Extract JSON array from output (skip any status messages)
+          TEAM_JSON=$(echo "$TEAM_LIST_OUTPUT" | sed -n '/^\[/,$p')
+
+          if [ -z "$TEAM_JSON" ]; then
+            echo "ERROR: Failed to get team list from API"
+            echo "Raw output: $TEAM_LIST_OUTPUT"
+            exit 1
+          fi
+
+          # Get vault content for the target team
+          VAULT_CONTENT=$(echo "$TEAM_JSON" | \
+            jq -r --arg team "$SYSTEM_DEFAULT_TEAM_NAME" \
+            '.[] | select(.teamName == $team or .TeamName == $team) | (.vaultContent // .VaultContent // empty)')
+
+          if [ -z "$VAULT_CONTENT" ] || [ "$VAULT_CONTENT" = "null" ]; then
+            echo "ERROR: Team vault is empty or not accessible for team '$SYSTEM_DEFAULT_TEAM_NAME'"
+            echo "Available teams:"
+            echo "$TEAM_JSON" | jq -r '.[].teamName // .[].TeamName'
+            exit 1
+          fi
+
+          # Parse vault content (handle both string and object formats)
+          TEAM_VAULT=$(echo "$VAULT_CONTENT" | jq 'if type == "string" then fromjson else . end' 2>/dev/null)
+
+          if [ -z "$TEAM_VAULT" ] || [ "$TEAM_VAULT" = "null" ] || [ "$TEAM_VAULT" = "{}" ]; then
+            echo "ERROR: Failed to parse team vault content"
+            echo "Raw vault content: $VAULT_CONTENT"
+            exit 1
+          fi
+
+          # Extract and decode SSH keys with validation
           echo "Extracting SSH keys from vault..."
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
 
-          echo "$TEAM_VAULT" | jq -r '.SSH_PRIVATE_KEY' | base64 -d > ~/.ssh/id_rsa
-          echo "$TEAM_VAULT" | jq -r '.SSH_PUBLIC_KEY' | base64 -d > ~/.ssh/id_rsa.pub
+          SSH_PRIVATE_KEY=$(echo "$TEAM_VAULT" | jq -r '.SSH_PRIVATE_KEY // empty')
+          SSH_PUBLIC_KEY=$(echo "$TEAM_VAULT" | jq -r '.SSH_PUBLIC_KEY // empty')
+
+          if [ -z "$SSH_PRIVATE_KEY" ]; then
+            echo "ERROR: SSH_PRIVATE_KEY not found in team vault"
+            echo "Vault keys: $(echo "$TEAM_VAULT" | jq -r 'keys | join(", ")')"
+            exit 1
+          fi
+
+          if [ -z "$SSH_PUBLIC_KEY" ]; then
+            echo "ERROR: SSH_PUBLIC_KEY not found in team vault"
+            echo "Vault keys: $(echo "$TEAM_VAULT" | jq -r 'keys | join(", ")')"
+            exit 1
+          fi
+
+          # Decode and write SSH keys
+          echo "$SSH_PRIVATE_KEY" | base64 -d > ~/.ssh/id_rsa
+          echo "$SSH_PUBLIC_KEY" | base64 -d > ~/.ssh/id_rsa.pub
 
           chmod 600 ~/.ssh/id_rsa
           chmod 644 ~/.ssh/id_rsa.pub
+
+          # Validate the generated files
+          if [ ! -s ~/.ssh/id_rsa ]; then
+            echo "ERROR: Private key file is empty after decoding"
+            exit 1
+          fi
+
+          if [ ! -s ~/.ssh/id_rsa.pub ]; then
+            echo "ERROR: Public key file is empty after decoding"
+            exit 1
+          fi
 
           echo "✓ SSH keys extracted and written to ~/.ssh/"
           echo "Key fingerprint:"
