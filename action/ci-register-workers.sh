@@ -202,7 +202,7 @@ _queue_setup_task() {
         --arg datastore "$MACHINE_DATASTORE" \
         --arg host_entry "$host_key" \
         --arg api_url "$SYSTEM_API_URL" \
-        --argjson company_vault "$COMPANY_VAULT_JSON" \
+        --argjson organization_vault "$ORGANIZATION_VAULT_JSON" \
         --argjson team_vault "$TEAM_VAULT_JSON" \
         '{
             function: "setup",
@@ -217,7 +217,7 @@ _queue_setup_task() {
                 install_nvidia_driver: "auto"
             },
             contextData: {
-                GENERAL_SETTINGS: ($company_vault + $team_vault + {
+                GENERAL_SETTINGS: ($organization_vault + $team_vault + {
                     SYSTEM_API_URL: $api_url,
                     MACHINES: {
                         ($machine): {
@@ -236,7 +236,7 @@ _queue_setup_task() {
                         HOST_ENTRY: $host_entry
                     }
                 },
-                company: $company_vault
+                organization: $organization_vault
             }
         }')
 
@@ -276,20 +276,20 @@ echo ""
 echo "Step 2: Fetching vault data for setup tasks"
 echo "---------------------------------------------"
 
-# Fetch company credential and vault data (Console CLI syntax)
-echo "Fetching company vault..."
-COMPANY_RESPONSE=$(_run_cli_command company vault get -o json 2>&1 | sed -n '/^{/,$p')
+# Fetch organization credential and vault data (Console CLI syntax)
+echo "Fetching organization vault..."
+ORGANIZATION_RESPONSE=$(_run_cli_command organization vault get -o json 2>&1 | sed -n '/^{/,$p')
 CLI_EXIT_CODE="${PIPESTATUS[0]}"
 
-if [ "$CLI_EXIT_CODE" -ne 0 ] || [ -z "$COMPANY_RESPONSE" ]; then
-    echo "Warning: Could not fetch company vault data"
+if [ "$CLI_EXIT_CODE" -ne 0 ] || [ -z "$ORGANIZATION_RESPONSE" ]; then
+    echo "Warning: Could not fetch organization vault data"
     echo "Setup tasks will not be queued"
     SKIP_SETUP=true
 else
-    # Console CLI returns: { vault: string, vaultVersion: number, companyCredential: string }
-    COMPANY_CREDENTIAL=$(echo "$COMPANY_RESPONSE" | jq -r '.companyCredential // empty')
-    COMPANY_VAULT_STR=$(echo "$COMPANY_RESPONSE" | jq -r '.vault // "{}"')
-    echo "✓ Company credential: ${COMPANY_CREDENTIAL:0:8}..."
+    # Console CLI returns: { vault: string, vaultVersion: number, organizationCredential: string }
+    ORGANIZATION_CREDENTIAL=$(echo "$ORGANIZATION_RESPONSE" | jq -r '.organizationCredential // empty')
+    ORGANIZATION_VAULT_STR=$(echo "$ORGANIZATION_RESPONSE" | jq -r '.vault // "{}"')
+    echo "✓ Organization credential: ${ORGANIZATION_CREDENTIAL:0:8}..."
 
     # Fetch team vault data (Console CLI returns array directly)
     echo "Fetching team vault..."
@@ -306,8 +306,8 @@ else
             .[] | select(.teamName == $team or .TeamName == $team) | (.vaultContent // .VaultContent // "{}")
         ')
 
-        # Parse vaults and add COMPANY_ID
-        COMPANY_VAULT_JSON=$(echo "$COMPANY_VAULT_STR" | jq --arg id "$COMPANY_CREDENTIAL" '. + {COMPANY_ID: $id}' 2>/dev/null || echo '{}')
+        # Parse vaults and add ORGANIZATION_ID
+        ORGANIZATION_VAULT_JSON=$(echo "$ORGANIZATION_VAULT_STR" | jq --arg id "$ORGANIZATION_CREDENTIAL" '. + {ORGANIZATION_ID: $id}' 2>/dev/null || echo '{}')
         TEAM_VAULT_JSON=$(echo "$TEAM_VAULT_STR" | jq '.' 2>/dev/null || echo '{}')
         echo "✓ Vault data fetched successfully"
     fi
