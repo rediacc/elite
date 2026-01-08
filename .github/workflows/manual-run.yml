@@ -216,14 +216,8 @@ jobs:
           timeout 60 bash -c 'until ./go health; do sleep 2; done'
           echo "✓ Middleware is healthy"
 
-          # Install rediacc CLI from local /pypi/ (embedded in web image)
-          # Note: rediacc is NOT published to public PyPI - must use embedded package
           TAG_VERSION="${TAG:-latest}"
-          LOCAL_PYPI="http://localhost/pypi/"
           LOCAL_NPM="http://localhost/npm/"
-
-          echo "Installing system dependencies for rediacc CLI..."
-          sudo apt-get install -y python3-tk
 
           # Check if CLI packages are embedded in the web image
           echo "Checking for embedded CLI packages..."
@@ -246,39 +240,18 @@ jobs:
             exit 1
           fi
 
-          # Install rediacc CLI (Python) - required for other software dependencies
-          # Note: rediacc is NOT published to public PyPI - must use embedded package
-          echo "Installing rediacc CLI (Python)..."
-          if [ "$TAG_VERSION" = "latest" ]; then
-            if pip install --quiet --find-links "$LOCAL_PYPI" --trusted-host localhost rediacc 2>/dev/null; then
-              echo "✓ Installed rediacc from local /pypi/"
-            else
-              echo "ERROR: Failed to install rediacc from local /pypi/"
-              echo "Check that the web image has CLI packages embedded."
-              exit 1
-            fi
-          else
-            if pip install --quiet --find-links "$LOCAL_PYPI" --trusted-host localhost "rediacc==$TAG_VERSION" 2>/dev/null; then
-              echo "✓ Installed rediacc $TAG_VERSION from local /pypi/"
-            elif pip install --quiet --find-links "$LOCAL_PYPI" --trusted-host localhost rediacc 2>/dev/null; then
-              echo "⚠ Version $TAG_VERSION not found, installed latest from local /pypi/"
-            else
-              echo "ERROR: Failed to install rediacc from local /pypi/"
-              echo "Check that the web image has CLI packages embedded."
-              exit 1
-            fi
-          fi
-
           # Install rdc CLI (Node.js) - use "latest" URL for simplicity
           # Note: npm package must be embedded in web image via ./go build prod
           echo "Installing rdc CLI (Node.js)..."
           LOCAL_TGZ_LATEST="${LOCAL_NPM}rediacc-cli-latest.tgz"
 
           if curl -sf "$LOCAL_TGZ_LATEST" -o /dev/null 2>/dev/null; then
-            if npm install -g "$LOCAL_TGZ_LATEST" 2>/dev/null; then
+            echo "Installing from: $LOCAL_TGZ_LATEST"
+            if npm install -g "$LOCAL_TGZ_LATEST"; then
               echo "✓ Installed rdc from local /npm/"
             else
               echo "ERROR: Failed to install rdc from local /npm/"
+              echo "npm install error shown above ^^^"
               exit 1
             fi
           else
@@ -291,13 +264,12 @@ jobs:
           # Show CLI packages metadata if available
           echo ""
           echo "CLI packages info:"
-          curl -sf "http://localhost/cli-packages.json" | jq -r '"  Python:  \(.packages.python.version) (\(.packages.python.filename))"' 2>/dev/null || echo "  Python: (metadata not available)"
           curl -sf "http://localhost/cli-packages.json" | jq -r '"  Node.js: \(.packages.nodejs.version) (\(.packages.nodejs.filename))"' 2>/dev/null || echo "  Node.js: (metadata not available)"
+          curl -sf "http://localhost/cli-packages.json" | jq -r '"  Renet:   \(.packages.renet.version)"' 2>/dev/null || echo "  Renet: (metadata not available)"
 
           # Verify installation
           echo ""
           echo "CLI versions installed:"
-          rediacc --version 2>/dev/null || echo "  rediacc: not installed"
           rdc --version 2>/dev/null || echo "  rdc: not installed"
           echo ""
 

@@ -104,3 +104,10 @@ export CONNECTION_STRING="Server=sql,1433;Database=${REDIACC_DATABASE_NAME};User
 # Don't set INSTANCE_NAME for CI - use standalone mode with auto-created networks
 # Cloud mode (INSTANCE_NAME set) requires pre-existing external networks which CI doesn't have
 # export INSTANCE_NAME="ci-${GITHUB_RUN_ID}"
+
+# Export SYSTEM_DEFAULT_* variables to GITHUB_ENV for subsequent steps (e.g., ops action)
+if [ -n "$GITHUB_ENV" ]; then
+    echo "SYSTEM_DEFAULT_TEAM_NAME=${SYSTEM_DEFAULT_TEAM_NAME}" >> "$GITHUB_ENV"
+    echo "SYSTEM_DEFAULT_REGION_NAME=${SYSTEM_DEFAULT_REGION_NAME}" >> "$GITHUB_ENV"
+    echo "SYSTEM_DEFAULT_BRIDGE_NAME=${SYSTEM_DEFAULT_BRIDGE_NAME}" >> "$GITHUB_ENV"
+fi
