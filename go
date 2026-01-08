@@ -457,22 +457,22 @@ _check_and_pull_images() {
     return 0
 }
 
-# Cleanup bridge containers matching SYSTEM_COMPANY_NAME
+# Cleanup bridge containers matching SYSTEM_ORGANIZATION_NAME
 cleanup_bridge_containers() {
-    # Only proceed if SYSTEM_COMPANY_NAME is set
-    if [ -z "$SYSTEM_COMPANY_NAME" ]; then
-        echo "SYSTEM_COMPANY_NAME not set, skipping bridge container cleanup"
+    # Only proceed if SYSTEM_ORGANIZATION_NAME is set
+    if [ -z "$SYSTEM_ORGANIZATION_NAME" ]; then
+        echo "SYSTEM_ORGANIZATION_NAME not set, skipping bridge container cleanup"
         return 0
     fi
 
-    echo "Cleaning up bridge containers for company: $SYSTEM_COMPANY_NAME"
+    echo "Cleaning up bridge containers for organization: $SYSTEM_ORGANIZATION_NAME"
 
-    # Sanitize company name same way as C# code (lowercase, replace non-alphanumeric with underscore)
-    local sanitized_name=$(echo "$SYSTEM_COMPANY_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
+    # Sanitize organization name same way as C# code (lowercase, replace non-alphanumeric with underscore)
+    local sanitized_name=$(echo "$SYSTEM_ORGANIZATION_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
     local container_name_pattern="bridge_${sanitized_name}"
 
     # Find containers by label
-    local containers_by_label=$(docker ps -a --filter "label=rediacc.company=$SYSTEM_COMPANY_NAME" --format "{{.ID}}\t{{.Names}}" 2>/dev/null)
+    local containers_by_label=$(docker ps -a --filter "label=rediacc.organization=$SYSTEM_ORGANIZATION_NAME" --format "{{.ID}}\t{{.Names}}" 2>/dev/null)
 
     # Find containers by name pattern
     local containers_by_name=$(docker ps -a --filter "name=${container_name_pattern}" --format "{{.ID}}\t{{.Names}}" 2>/dev/null)
@@ -481,7 +481,7 @@ cleanup_bridge_containers() {
     local all_containers=$(echo -e "${containers_by_label}\n${containers_by_name}" | sort -u | grep -v '^$')
 
     if [ -z "$all_containers" ]; then
-        echo "No bridge containers found for company: $SYSTEM_COMPANY_NAME"
+        echo "No bridge containers found for organization: $SYSTEM_ORGANIZATION_NAME"
         return 0
     fi
 
@@ -510,7 +510,7 @@ cleanup_bridge_containers() {
     fi
 
     if [ $stopped_count -gt 0 ]; then
-        echo "✓ Gracefully stopped and removed $stopped_count bridge container(s) for company: $SYSTEM_COMPANY_NAME"
+        echo "✓ Gracefully stopped and removed $stopped_count bridge container(s) for organization: $SYSTEM_ORGANIZATION_NAME"
     fi
 }
 

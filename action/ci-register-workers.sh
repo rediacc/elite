@@ -13,6 +13,11 @@ echo "============================================"
 echo "Registering worker machines with middleware"
 echo "============================================"
 
+# Load shared provisioning helpers from ops (if available)
+if [ -f "$PROJECT_ROOT/ops/scripts/provisioning.sh" ]; then
+    source "$PROJECT_ROOT/ops/scripts/provisioning.sh"
+fi
+
 # Source CI environment variables
 if [ -f "$SCRIPT_DIR/ci-env.sh" ]; then
     source "$SCRIPT_DIR/ci-env.sh"
@@ -129,19 +134,10 @@ _generate_machine_name() {
 # Helper function to extract SSH host key
 _extract_host_key() {
     local ip="$1"
-
-    # Try ed25519 first, fallback to RSA
-    local host_key=$(ssh-keyscan -t ed25519 "$ip" 2>/dev/null | head -1)
-    if [ -z "$host_key" ]; then
-        host_key=$(ssh-keyscan -t rsa "$ip" 2>/dev/null | head -1)
-    fi
-
-    if [ -z "$host_key" ]; then
+    if ! provision_wait_for_ssh_host_key "$ip" 10 3; then
         echo "Error: Could not extract SSH host key for $ip" >&2
         return 1
     fi
-
-    echo "$host_key"
 }
 
 # Helper function to register a single machine
@@ -151,34 +147,12 @@ _register_machine() {
     local host_key="$3"
 
     # Create machine vault JSON
-    local machine_vault=$(jq -n \
-        --arg alias "$machine_name" \
-        --arg ip "$ip" \
-        --arg user "$MACHINE_USER" \
-        --arg datastore "$MACHINE_DATASTORE" \
-        --arg host_entry "$host_key" \
-        '{
-            alias: $alias,
-            ip: $ip,
-            user: $user,
-            datastore: $datastore,
-            host_entry: $host_entry,
-            ssh_password: ""
-        }')
+    local machine_vault
+    machine_vault=$(provision_build_machine_vault "$machine_name" "$ip" "$MACHINE_USER" "$MACHINE_DATASTORE" "$host_key" 22 "")
 
     # Register machine with middleware (Console CLI syntax)
     local output
-    output=$(_run_cli_command machine create "$machine_name" \
-        -t "${SYSTEM_DEFAULT_TEAM_NAME}" \
-        -b "${SYSTEM_DEFAULT_BRIDGE_NAME}" \
-        --vault "$machine_vault" 2>&1)
-    local exit_code=$?
-
-    # Show output for debugging
-    echo "  CLI output: $output"
-    echo "  Exit code: $exit_code"
-
-    if echo "$output" | grep -qi "created\|success"; then
+    if provision_register_machine "${SYSTEM_DEFAULT_TEAM_NAME}" "${SYSTEM_DEFAULT_BRIDGE_NAME}" "$machine_name" "$machine_vault"; then
         echo "✓ Registered machine: $machine_name ($ip)"
         return 0
     else
@@ -192,62 +166,18 @@ _queue_setup_task() {
     local ip="$1"
     local machine_name="$2"
     local host_key="$3"
-
-    # Build the setup vault with proper structure
-    local setup_vault=$(jq -n \
-        --arg team "$SYSTEM_DEFAULT_TEAM_NAME" \
-        --arg machine "$machine_name" \
-        --arg ip "$ip" \
-        --arg user "$MACHINE_USER" \
-        --arg datastore "$MACHINE_DATASTORE" \
-        --arg host_entry "$host_key" \
-        --arg api_url "$SYSTEM_API_URL" \
-        --argjson company_vault "$COMPANY_VAULT_JSON" \
-        --argjson team_vault "$TEAM_VAULT_JSON" \
-        '{
-            function: "setup",
-            machine: $machine,
-            team: $team,
-            params: {
-                datastore_size: "95%",
-                source: "apt-repo",
-                rclone_source: "install-script",
-                docker_source: "docker-repo",
-                install_amd_driver: "auto",
-                install_nvidia_driver: "auto"
-            },
-            contextData: {
-                GENERAL_SETTINGS: ($company_vault + $team_vault + {
-                    SYSTEM_API_URL: $api_url,
-                    MACHINES: {
-                        ($machine): {
-                            IP: $ip,
-                            USER: $user,
-                            DATASTORE: $datastore,
-                            HOST_ENTRY: $host_entry
-                        }
-                    }
-                }),
-                MACHINES: {
-                    ($machine): {
-                        IP: $ip,
-                        USER: $user,
-                        DATASTORE: $datastore,
-                        HOST_ENTRY: $host_entry
-                    }
-                },
-                company: $company_vault
-            }
-        }')
-
-    # Queue setup task (Console CLI syntax)
-    if _run_cli_command queue create \
-        -f "setup" \
-        -t "$SYSTEM_DEFAULT_TEAM_NAME" \
-        -m "$machine_name" \
-        -b "${SYSTEM_DEFAULT_BRIDGE_NAME}" \
-        --vault "$setup_vault" \
-        -p 1 2>&1 | grep -qi "created\|task.*id\|success"; then
+    if provision_queue_setup_task_v2 \
+        "$SYSTEM_DEFAULT_TEAM_NAME" \
+        "$machine_name" \
+        "$ip" \
+        "$MACHINE_USER" \
+        "$MACHINE_DATASTORE" \
+        "$host_key" \
+        "${SYSTEM_DEFAULT_BRIDGE_NAME}" \
+        "$SYSTEM_API_URL" \
+        "$TEAM_VAULT_JSON" \
+        "$ORGANIZATION_VAULT_JSON" \
+        1; then
         echo "✓ Queued setup task for: $machine_name"
         return 0
     else
@@ -276,20 +206,20 @@ echo ""
 echo "Step 2: Fetching vault data for setup tasks"
 echo "---------------------------------------------"
 
-# Fetch company credential and vault data (Console CLI syntax)
-echo "Fetching company vault..."
-COMPANY_RESPONSE=$(_run_cli_command company vault get -o json 2>&1 | sed -n '/^{/,$p')
+# Fetch organization credential and vault data (Console CLI syntax)
+echo "Fetching organization vault..."
+ORGANIZATION_RESPONSE=$(_run_cli_command organization vault get -o json 2>&1 | sed -n '/^{/,$p')
 CLI_EXIT_CODE="${PIPESTATUS[0]}"
 
-if [ "$CLI_EXIT_CODE" -ne 0 ] || [ -z "$COMPANY_RESPONSE" ]; then
-    echo "Warning: Could not fetch company vault data"
+if [ "$CLI_EXIT_CODE" -ne 0 ] || [ -z "$ORGANIZATION_RESPONSE" ]; then
+    echo "Warning: Could not fetch organization vault data"
     echo "Setup tasks will not be queued"
     SKIP_SETUP=true
 else
-    # Console CLI returns: { vault: string, vaultVersion: number, companyCredential: string }
-    COMPANY_CREDENTIAL=$(echo "$COMPANY_RESPONSE" | jq -r '.companyCredential // empty')
-    COMPANY_VAULT_STR=$(echo "$COMPANY_RESPONSE" | jq -r '.vault // "{}"')
-    echo "✓ Company credential: ${COMPANY_CREDENTIAL:0:8}..."
+    # Console CLI returns: { vault: string, vaultVersion: number, organizationCredential: string }
+    ORGANIZATION_CREDENTIAL=$(echo "$ORGANIZATION_RESPONSE" | jq -r '.organizationCredential // empty')
+    ORGANIZATION_VAULT_STR=$(echo "$ORGANIZATION_RESPONSE" | jq -r '.vault // "{}"')
+    echo "✓ Organization credential: ${ORGANIZATION_CREDENTIAL:0:8}..."
 
     # Fetch team vault data (Console CLI returns array directly)
     echo "Fetching team vault..."
@@ -306,8 +236,8 @@ else
             .[] | select(.teamName == $team or .TeamName == $team) | (.vaultContent // .VaultContent // "{}")
         ')
 
-        # Parse vaults and add COMPANY_ID
-        COMPANY_VAULT_JSON=$(echo "$COMPANY_VAULT_STR" | jq --arg id "$COMPANY_CREDENTIAL" '. + {COMPANY_ID: $id}' 2>/dev/null || echo '{}')
+        # Parse vaults and add ORGANIZATION_ID
+        ORGANIZATION_VAULT_JSON=$(echo "$ORGANIZATION_VAULT_STR" | jq --arg id "$ORGANIZATION_CREDENTIAL" '. + {ORGANIZATION_ID: $id}' 2>/dev/null || echo '{}')
         TEAM_VAULT_JSON=$(echo "$TEAM_VAULT_STR" | jq '.' 2>/dev/null || echo '{}')
         echo "✓ Vault data fetched successfully"
     fi
