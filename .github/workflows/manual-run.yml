@@ -88,6 +88,11 @@ on:
         required: false
         default: false
         type: boolean
+      skip-machine-registration:
+        description: 'Skip automatic machine registration (VMs will be provisioned but not registered with middleware)'
+        required: false
+        default: false
+        type: boolean
       ci-mode:
         description: 'Enable CI/TEST mode (bypasses email and captcha validation)'
         required: false
@@ -390,6 +395,7 @@ jobs:
           DOCKER_BRIDGE_API_URL: http://localhost
           SYSTEM_API_URL: http://localhost/api
           CI_MODE: ${{ github.event.inputs.ci-mode != 'false' && 'true' || 'false' }}
+          SKIP_MACHINE_REGISTRATION: ${{ github.event.inputs.skip-machine-registration == 'true' && 'true' || 'false' }}
 
       - name: Capture VM Provisioning Logs on Failure
         if: failure() && (github.event.inputs.enable-vms || env.DEFAULT_ENABLE_VMS) == 'true'
