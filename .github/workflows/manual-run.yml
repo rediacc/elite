@@ -133,6 +133,11 @@ on:
     # Run once daily at 00:00 UTC
     - cron: '0 0 * * *'
 
+# Cancel in-progress runs when a new run is triggered for the same branch/PR
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   run-services:
     name: Run Rediacc Elite Services
