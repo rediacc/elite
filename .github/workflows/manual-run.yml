@@ -134,8 +134,11 @@ on:
     - cron: '0 0 * * *'
 
 # Cancel in-progress runs when a new run is triggered for the same branch/PR
+# For workflow_dispatch: use run_id so each manual run is independent
+# For pull_request: use PR number so duplicate PR runs are cancelled
+# For push/schedule: use ref so duplicate branch runs are cancelled
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
