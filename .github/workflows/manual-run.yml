@@ -88,11 +88,6 @@ on:
         required: false
         default: false
         type: boolean
-      skip-machine-registration:
-        description: 'Skip automatic machine registration'
-        required: false
-        default: false
-        type: boolean
       ci-mode:
         description: 'Enable CI/TEST mode (bypasses email and captcha validation)'
         required: false
@@ -394,7 +389,6 @@ jobs:
           DOCKER_BRIDGE_NETWORK_MODE: host
           DOCKER_BRIDGE_API_URL: http://localhost
           SYSTEM_API_URL: http://localhost/api
-          SKIP_MACHINE_REGISTRATION: 'true'
           CI_MODE: ${{ github.event.inputs.ci-mode != 'false' && 'true' || 'false' }}
 
       - name: Capture VM Provisioning Logs on Failure
@@ -491,20 +485,6 @@ jobs:
           echo "🔑 SSH KEYS: Using keys from middleware (single source of truth)"
           echo "⚙️  VMs are now accessible with middleware's SSH keys"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-      - name: Register Worker Machines
-        if: (github.event.inputs.enable-vms || env.DEFAULT_ENABLE_VMS) == 'true' && github.event.inputs.skip-machine-registration != 'true'
-        run: |
-          source action/ci-env.sh
-
-          # Set environment variables for registration
-          export VM_DEPLOYMENT="true"
-          export VM_BRIDGE_IP="${{ steps.vms.outputs.bridge-ip }}"
-          export VM_WORKER_IPS="${{ steps.vms.outputs.worker-ips }}"
-          export VM_PROVIDER="${{ github.event.inputs.vm-provider || 'kvm' }}"
-
-          echo "Registering worker machines with middleware..."
-          action/ci-register-workers.sh
 
       - name: Display Service Information
         run: |
