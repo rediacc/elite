@@ -14,8 +14,10 @@ echo "Registering worker machines with middleware"
 echo "============================================"
 
 # Load shared provisioning helpers from ops (if available)
-if [ -f "$PROJECT_ROOT/ops/scripts/provisioning.sh" ]; then
-    source "$PROJECT_ROOT/ops/scripts/provisioning.sh"
+# OPS_REPO_PATH is set by setup-vms action in CI
+OPS_PATH="${OPS_REPO_PATH:-$PROJECT_ROOT/ops}"
+if [ -f "$OPS_PATH/scripts/provisioning.sh" ]; then
+    source "$OPS_PATH/scripts/provisioning.sh"
 fi
 
 # Source CI environment variables
