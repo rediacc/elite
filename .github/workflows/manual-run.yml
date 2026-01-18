@@ -468,7 +468,7 @@ jobs:
             /home/runner/work/_actions/rediacc/ops/main/staging/
             staging/
           if-no-files-found: ignore
-          retention-days: 7
+          retention-days: 3
 
       - name: Display VM Information
         if: (github.event.inputs.enable-vms || env.DEFAULT_ENABLE_VMS) == 'true'
@@ -630,7 +630,7 @@ jobs:
         with:
           name: deployment-info-${{ github.run_id }}
           path: deployment-info.json
-          retention-days: 1
+          retention-days: 3
 
       - name: Display Access Information and Keep Services Alive
         run: |
