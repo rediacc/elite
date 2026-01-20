@@ -19,15 +19,16 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
     # Authenticate to registry
     echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
 
-    # Pull all required images
-    echo "Pulling web:${TAG}..."
-    docker pull --quiet "${DOCKER_REGISTRY}/web:${TAG}"
+    # Pull all required images using per-image tags
+    # WEB_TAG, API_TAG, BRIDGE_TAG are set by console CI workflow
+    echo "Pulling web:${WEB_TAG}..."
+    docker pull --quiet "${DOCKER_REGISTRY}/web:${WEB_TAG}"
 
-    echo "Pulling api:${TAG}..."
-    docker pull --quiet "${DOCKER_REGISTRY}/api:${TAG}"
+    echo "Pulling api:${API_TAG}..."
+    docker pull --quiet "${DOCKER_REGISTRY}/api:${API_TAG}"
 
-    echo "Pulling bridge image..."
-    docker pull --quiet "${DOCKER_BRIDGE_IMAGE}"
+    echo "Pulling bridge:${BRIDGE_TAG}..."
+    docker pull --quiet "${DOCKER_REGISTRY}/bridge:${BRIDGE_TAG}"
 
     # Pull Caddy gateway image if desktop is enabled
     if [ "$ENABLE_DESKTOP" == "true" ]; then

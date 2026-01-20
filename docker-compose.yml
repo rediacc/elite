@@ -1,6 +1,6 @@
 services:
   web:
-    image: ${DOCKER_REGISTRY}/web:${TAG}
+    image: ${DOCKER_REGISTRY}/web:${WEB_TAG:-${TAG}}
     pull_policy: never
     container_name: ${INSTANCE_NAME:-rediacc}-web
     hostname: ${INSTANCE_NAME:-rediacc}-web
@@ -16,14 +16,14 @@ services:
     restart: unless-stopped
 
   api:
-    image: ${DOCKER_REGISTRY}/api:${TAG}
+    image: ${DOCKER_REGISTRY}/api:${API_TAG:-${TAG}}
     pull_policy: never
     container_name: ${INSTANCE_NAME:-rediacc}-api
     hostname: ${INSTANCE_NAME:-rediacc}-api
     environment:
       # Runtime configuration
       - ASPNETCORE_ENVIRONMENT=Production
-      - ConnectionString=${CONNECTION_STRING}
+      - CONNECTION_STRING=${CONNECTION_STRING}
       - DOCKER_BRIDGE_IMAGE=${DOCKER_BRIDGE_IMAGE}
       - DOCKER_INTERNET_NETWORK=${INSTANCE_NAME:+${INSTANCE_NAME}_}rediacc_internet
       - DOCKER_BRIDGE_NETWORK_MODE=${DOCKER_BRIDGE_NETWORK_MODE:-}

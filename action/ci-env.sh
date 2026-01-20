@@ -9,6 +9,9 @@ ELITE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 # Preserve environment variables from workflow before sourcing .env
 WORKFLOW_TAG="${TAG}"
 WORKFLOW_CI_MODE="${CI_MODE}"
+WORKFLOW_API_TAG="${API_TAG}"
+WORKFLOW_BRIDGE_TAG="${BRIDGE_TAG}"
+WORKFLOW_WEB_TAG="${WEB_TAG}"
 
 # Check if .env file exists, create from template if missing
 if [ ! -f "$ELITE_DIR/.env" ]; then
@@ -36,6 +39,17 @@ fi
 if [ -n "$WORKFLOW_CI_MODE" ]; then
     CI_MODE="$WORKFLOW_CI_MODE"
     export CI_MODE
+fi
+
+# Restore per-image tags from workflow (set by console CI)
+if [ -n "$WORKFLOW_API_TAG" ]; then
+    API_TAG="$WORKFLOW_API_TAG"
+fi
+if [ -n "$WORKFLOW_BRIDGE_TAG" ]; then
+    BRIDGE_TAG="$WORKFLOW_BRIDGE_TAG"
+fi
+if [ -n "$WORKFLOW_WEB_TAG" ]; then
+    WEB_TAG="$WORKFLOW_WEB_TAG"
 fi
 
 # Function to generate secure password
@@ -70,8 +84,13 @@ export DOCKER_REGISTRY="${DOCKER_REGISTRY}"
 # Use TAG from environment if set (e.g., from workflow), otherwise use value from .env
 export TAG="${TAG:-latest}"
 
-# Ensure DOCKER_BRIDGE_IMAGE includes the tag (required for middleware to create bridge containers)
-export DOCKER_BRIDGE_IMAGE="${DOCKER_REGISTRY}/bridge:${TAG}"
+# Export per-image tags (set by console CI, fallback to TAG for backwards compatibility)
+export API_TAG="${API_TAG:-$TAG}"
+export BRIDGE_TAG="${BRIDGE_TAG:-$TAG}"
+export WEB_TAG="${WEB_TAG:-$TAG}"
+
+# Ensure DOCKER_BRIDGE_IMAGE uses BRIDGE_TAG (required for middleware to create bridge containers)
+export DOCKER_BRIDGE_IMAGE="${DOCKER_REGISTRY}/bridge:${BRIDGE_TAG}"
 
 # Set Docker network name for bridge containers (standalone mode uses rediacc_internet)
 export DOCKER_INTERNET_NETWORK="rediacc_internet"
