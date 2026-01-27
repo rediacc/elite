@@ -81,6 +81,33 @@ _is_ci_mode() {
     return 1
 }
 
+# Function to check if go-sqlcmd is available
+_check_sqlcmd() {
+    if command -v sqlcmd &>/dev/null; then
+        return 0
+    fi
+    return 1
+}
+
+# Function to run SQL query using go-sqlcmd (external connection)
+_run_sql_query() {
+    local database="$1"
+    local query="$2"
+    local sql_port="${SYSTEM_SQL_PORT:-1433}"
+
+    if ! _check_sqlcmd; then
+        echo "⚠ sqlcmd (go-sqlcmd) not found, skipping SQL operation"
+        echo "  Install with: wget -qO- https://github.com/microsoft/go-sqlcmd/releases/download/v1.9.0/sqlcmd-linux-amd64.tar.bz2 | tar -xj -C /usr/local/bin"
+        return 1
+    fi
+
+    SQLCMDPASSWORD="${MSSQL_SA_PASSWORD}" sqlcmd \
+        -S "localhost,$sql_port" -U sa \
+        -d "$database" \
+        -Q "$query" \
+        -C 2>/dev/null
+}
+
 # Helper function to get the latest version from registry (without display)
 _get_latest_version() {
     # Check if Docker config exists
@@ -1064,15 +1091,12 @@ switch() {
                 set +a
             fi
 
-            # Execute cleanup procedure
-            if docker exec "$sql_container" /opt/mssql-tools18/bin/sqlcmd \
-                -S localhost -U sa -P "${MSSQL_SA_PASSWORD}" \
-                -d "${REDIACC_DATABASE_NAME:-RediaccMiddleware}" \
-                -Q "SET QUOTED_IDENTIFIER ON; EXEC [web].[internal_CleanupOrphanedTasks]" \
-                -C -W 2>/dev/null; then
+            # Execute cleanup procedure using go-sqlcmd (external connection)
+            if _run_sql_query "${REDIACC_DATABASE_NAME:-RediaccMiddleware}" \
+                "SET QUOTED_IDENTIFIER ON; EXEC [web].[internal_CleanupOrphanedTasks]"; then
                 echo "✓ Pre-upgrade cleanup completed"
             else
-                echo "⚠ Pre-upgrade cleanup skipped (procedure may not exist yet)"
+                echo "⚠ Pre-upgrade cleanup skipped (procedure may not exist yet or sqlcmd not available)"
             fi
         else
             echo "⚠ SQL container not running, skipping pre-upgrade cleanup"
