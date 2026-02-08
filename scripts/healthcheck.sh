@@ -44,7 +44,7 @@ check_api() {
     # Check if API container is healthy
     local container="${CONTAINER_PREFIX}-api"
 
-    if docker inspect "${container}" --format='{{.State.Health.Status}}' 2>/dev/null | grep -q "healthy\|none"; then
+    if docker inspect "${container}" --format='{{.State.Health.Status}}' 2>/dev/null | grep -q "healthy"; then
         echo -e "${GREEN}✓${NC} API is healthy"
         return 0
     else

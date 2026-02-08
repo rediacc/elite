@@ -14,11 +14,6 @@ _docker_compose() {
         cmd="$cmd -f docker-compose.standalone.yml"
     fi
 
-    # Add desktop gateway if ENABLE_DESKTOP is set (CI mode only)
-    if [ "$ENABLE_DESKTOP" == "true" ]; then
-        cmd="$cmd -f docker-compose.desktop.yml"
-    fi
-
     # Add project name if instance name is set (cloud mode)
     if [ -n "$INSTANCE_NAME" ]; then
         cmd="$cmd --project-name $INSTANCE_NAME"
@@ -70,15 +65,6 @@ _generate_complex_password() {
     
     # Final shuffle for good measure
     echo "$password" | fold -w1 | shuf | tr -d '\n'
-}
-
-# Function to detect if running in CI mode
-_is_ci_mode() {
-    # Return 0 (true) if running in CI, 1 (false) otherwise
-    if [ -n "$GITHUB_ACTIONS" ] || [ -n "$CI" ]; then
-        return 0
-    fi
-    return 1
 }
 
 # Function to check if go-sqlcmd is available
@@ -156,23 +142,21 @@ if [ ! -f ".env" ]; then
         cp .env.template .env
         echo -e "\e[32m.env file created. You can customize it with your settings.\e[0m"
 
-        # Auto-initialize TAG in standalone mode if it's set to 'latest'
-        if ! _is_ci_mode; then
-            current_tag=$(grep "^TAG=" .env 2>/dev/null | cut -d'=' -f2)
-            if [ "$current_tag" = "latest" ]; then
-                echo "Detected TAG=latest in standalone mode. Querying registry for latest version..."
-                latest_version=$(_get_latest_version)
-                if [ -n "$latest_version" ]; then
-                    # Replace TAG=latest with actual version in .env
-                    sed -i "s/^TAG=latest$/TAG=${latest_version}/" .env
-                    echo "Initialized TAG=${latest_version}"
-                else
-                    echo "Warning: Could not query registry (check Docker login)."
-                    echo "TAG is set to 'latest' which requires CI mode. Please run:"
-                    echo "  docker login ghcr.io"
-                    echo "  ./go versions"
-                    echo "  ./go switch <version>"
-                fi
+        # Auto-initialize TAG if it's set to 'latest'
+        current_tag=$(grep "^TAG=" .env 2>/dev/null | cut -d'=' -f2)
+        if [ "$current_tag" = "latest" ]; then
+            echo "Detected TAG=latest. Querying registry for latest version..."
+            latest_version=$(_get_latest_version)
+            if [ -n "$latest_version" ]; then
+                # Replace TAG=latest with actual version in .env
+                sed -i "s/^TAG=latest$/TAG=${latest_version}/" .env
+                echo "Initialized TAG=${latest_version}"
+            else
+                echo "Warning: Could not query registry (check Docker login)."
+                echo "Please run:"
+                echo "  docker login ghcr.io"
+                echo "  ./run.sh versions"
+                echo "  ./run.sh switch <version>"
             fi
         fi
     else
@@ -206,15 +190,6 @@ EOF
     echo -e "\e[31mIMPORTANT: Keep .env.secret secure and never commit it to git!\e[0m"
 fi
 
-# Preserve CI environment variables before sourcing .env
-# (ci-env.sh sets these for GitHub Actions - don't let .env override them)
-CI_REGISTRY_USERNAME="${DOCKER_REGISTRY_USERNAME}"
-CI_REGISTRY_PASSWORD="${DOCKER_REGISTRY_PASSWORD}"
-CI_WORKFLOW_MODE="${CI_MODE}"
-CI_WORKFLOW_TAG="${TAG}"
-CI_BRIDGE_NETWORK_MODE="${DOCKER_BRIDGE_NETWORK_MODE}"
-CI_BRIDGE_API_URL="${DOCKER_BRIDGE_API_URL}"
-
 # Source environment files and export for docker compose
 set -a  # automatically export all variables
 
@@ -232,24 +207,6 @@ if [ -z "$INSTANCE_NAME" ]; then
 fi
 
 set +a  # stop auto-exporting
-
-# Restore CI environment variables if they were set (don't let .env override them)
-if [ -n "$CI_REGISTRY_USERNAME" ]; then
-    export DOCKER_REGISTRY_USERNAME="$CI_REGISTRY_USERNAME"
-    export DOCKER_REGISTRY_PASSWORD="$CI_REGISTRY_PASSWORD"
-fi
-if [ -n "$CI_WORKFLOW_MODE" ]; then
-    export CI_MODE="$CI_WORKFLOW_MODE"
-fi
-if [ -n "$CI_WORKFLOW_TAG" ]; then
-    export TAG="$CI_WORKFLOW_TAG"
-fi
-if [ -n "$CI_BRIDGE_NETWORK_MODE" ]; then
-    export DOCKER_BRIDGE_NETWORK_MODE="$CI_BRIDGE_NETWORK_MODE"
-fi
-if [ -n "$CI_BRIDGE_API_URL" ]; then
-    export DOCKER_BRIDGE_API_URL="$CI_BRIDGE_API_URL"
-fi
 
 # =============================================================================
 # Rollback Configuration
@@ -570,27 +527,6 @@ up() {
             echo "Auto-generating self-signed SSL/TLS certificates..."
             echo ""
 
-            # Source environment to get SYSTEM_DOMAIN and SSL_EXTRA_DOMAINS
-            # Preserve CI variables before sourcing (don't let .env override them)
-            local saved_ci_mode="${CI_MODE}"
-            local saved_tag="${TAG}"
-            local saved_bridge_network_mode="${DOCKER_BRIDGE_NETWORK_MODE}"
-            local saved_bridge_api_url="${DOCKER_BRIDGE_API_URL}"
-            local saved_registry_username="${DOCKER_REGISTRY_USERNAME}"
-            local saved_registry_password="${DOCKER_REGISTRY_PASSWORD}"
-            set -a
-            if [ -f ".env" ]; then
-                source .env
-            fi
-            set +a
-            # Restore CI variables
-            [ -n "$saved_ci_mode" ] && export CI_MODE="$saved_ci_mode"
-            [ -n "$saved_tag" ] && export TAG="$saved_tag"
-            [ -n "$saved_bridge_network_mode" ] && export DOCKER_BRIDGE_NETWORK_MODE="$saved_bridge_network_mode"
-            [ -n "$saved_bridge_api_url" ] && export DOCKER_BRIDGE_API_URL="$saved_bridge_api_url"
-            [ -n "$saved_registry_username" ] && export DOCKER_REGISTRY_USERNAME="$saved_registry_username"
-            [ -n "$saved_registry_password" ] && export DOCKER_REGISTRY_PASSWORD="$saved_registry_password"
-
             # Export variables for cert generation
             export SYSTEM_DOMAIN="${SYSTEM_DOMAIN:-localhost}"
             export SSL_EXTRA_DOMAINS="${SSL_EXTRA_DOMAINS:-}"
@@ -605,7 +541,7 @@ up() {
                 else
                     echo -e "\e[31mError: Certificate generation failed!\e[0m"
                     echo "Services will start in HTTP-only mode."
-                    echo "To manually generate certificates, run: ./go cert"
+                    echo "To manually generate certificates, run: ./run.sh cert"
                     echo ""
                 fi
             else
@@ -625,14 +561,9 @@ up() {
             mkdir -p ./mssql
             # SQL Server 2022+ runs as non-root user (UID 10001)
             # Set ownership to allow SQL Server to write to the directory
-            if [ -n "$GITHUB_ACTIONS" ]; then
-                # In CI, running with sudo permissions
-                sudo chown 10001:10001 ./mssql
-            elif command -v sudo >/dev/null 2>&1; then
-                # Local development with sudo available
+            if command -v sudo >/dev/null 2>&1; then
                 sudo chown 10001:10001 ./mssql
             else
-                # If sudo not available (e.g., running as root), use chown directly
                 chown 10001:10001 ./mssql 2>/dev/null || echo "Warning: Could not set ownership on ./mssql directory"
             fi
         fi
@@ -828,9 +759,9 @@ reset() {
     fi
 
     echo "Next steps:"
-    echo "  1. Run: ./go up"
+    echo "  1. Run: ./run.sh up"
     if [ -n "$saved_tag" ] && [ "$saved_tag" != "latest" ]; then
-        echo "  2. Restore version: ./go switch $saved_tag"
+        echo "  2. Restore version: ./run.sh switch $saved_tag"
     fi
     echo ""
 }
@@ -869,11 +800,8 @@ restart() {
 
 # Function to check health
 health() {
-    # Run the healthcheck script (check action folder first, then .github for backward compatibility)
-    if [ -f "action/healthcheck.sh" ]; then
-        ./action/healthcheck.sh
-    elif [ -f ".github/healthcheck.sh" ]; then
-        ./.github/healthcheck.sh
+    if [ -f "scripts/healthcheck.sh" ]; then
+        ./scripts/healthcheck.sh
     else
         echo "Error: healthcheck.sh not found"
         exit 1
@@ -911,7 +839,7 @@ version() {
     done
 
     if [ "$containers_running" = false ]; then
-        echo "  No containers running (use './go up' to start services)"
+        echo "  No containers running (use './run.sh up' to start services)"
     fi
 }
 
@@ -979,16 +907,6 @@ versions() {
 
         printf "%-12s %s\n" "$ver" "$status"
     done
-
-    # Show latest tag separately (only in CI mode)
-    if _is_ci_mode; then
-        echo ""
-        local latest_status=""
-        if [ "$current_tag" = "latest" ]; then
-            latest_status="* (current)"
-        fi
-        printf "%-12s %s\n" "latest" "$latest_status"
-    fi
 }
 
 # Function to switch to a different version
@@ -1007,21 +925,20 @@ switch() {
     # Check if version parameter is provided
     if [ -z "$new_version" ]; then
         echo "Error: Version parameter required"
-        echo "Usage: ./go switch <version> [--no-rollback]"
+        echo "Usage: ./run.sh switch <version> [--no-rollback]"
         echo "Examples:"
-        echo "  ./go switch 0.2.1"
-        echo "  ./go switch 0.2.0"
-        echo "  ./go switch 0.2.1 --no-rollback"
+        echo "  ./run.sh switch 0.2.1"
+        echo "  ./run.sh switch 0.2.0"
+        echo "  ./run.sh switch 0.2.1 --no-rollback"
         exit 1
     fi
 
-    # Reject "latest" tag unless in CI mode
-    if [ "$new_version" = "latest" ] && ! _is_ci_mode; then
-        echo "Error: The 'latest' tag is only available in CI mode for testing purposes"
+    # Reject "latest" tag - require specific versions
+    if [ "$new_version" = "latest" ]; then
+        echo "Error: The 'latest' tag is not supported. Please use a specific version."
         echo ""
-        echo "For standalone and cloud deployments, please use a specific version:"
-        echo "  ./go versions           # List available versions"
-        echo "  ./go switch 0.2.2       # Switch to a specific version"
+        echo "  ./run.sh versions           # List available versions"
+        echo "  ./run.sh switch 0.2.2       # Switch to a specific version"
         exit 1
     fi
 
@@ -1111,7 +1028,7 @@ switch() {
             if [ "$no_rollback" = true ]; then
                 echo ""
                 echo "✗ Switch to ${new_version} failed (rollback disabled)"
-                echo "Use './go rollback' to manually rollback to ${previous_version}"
+                echo "Use './run.sh rollback' to manually rollback to ${previous_version}"
                 exit 1
             fi
 
@@ -1131,7 +1048,7 @@ switch() {
     else
         echo ""
         echo "✓ Version updated to ${new_version}"
-        echo "Run './go up' to start services with the new version"
+        echo "Run './run.sh up' to start services with the new version"
     fi
 }
 
@@ -1197,8 +1114,8 @@ cert() {
         echo ""
         echo "To use HTTPS, ensure ENABLE_HTTPS=true in your .env file (default)"
         echo "Then restart the services:"
-        echo "  ./go down"
-        echo "  ./go up"
+        echo "  ./run.sh down"
+        echo "  ./run.sh up"
     else
         echo -e "\e[31mError: Certificate generation failed!\e[0m"
         exit 1
@@ -1212,7 +1129,7 @@ cert_info() {
     if [ ! -f "$CERT_FILE" ]; then
         echo -e "\e[33mNo certificate found at $CERT_FILE\e[0m"
         echo ""
-        echo "Generate certificates with: ./go cert"
+        echo "Generate certificates with: ./run.sh cert"
         exit 1
     fi
 
@@ -1246,10 +1163,10 @@ cert_info() {
 
         if [ $days_until_expiry -lt 0 ]; then
             echo -e "\e[31m⚠ Certificate has EXPIRED!\e[0m"
-            echo "Run './go cert' to generate a new certificate"
+            echo "Run './run.sh cert' to generate a new certificate"
         elif [ $days_until_expiry -lt 30 ]; then
             echo -e "\e[33m⚠ Certificate expires in $days_until_expiry days\e[0m"
-            echo "Consider regenerating with './go cert'"
+            echo "Consider regenerating with './run.sh cert'"
         else
             echo -e "\e[32m✓ Certificate is valid (expires in $days_until_expiry days)\e[0m"
         fi
@@ -1266,7 +1183,7 @@ cert_info() {
 help() {
     echo "Elite Core Docker Management Script"
     echo ""
-    echo "Usage: ./go [command] [options]"
+    echo "Usage: ./run.sh [command] [options]"
     echo ""
     echo "Commands:"
     echo "  up         - Start all services"
@@ -1287,21 +1204,21 @@ help() {
     echo "  help       - Show this help message"
     echo ""
     echo "Examples:"
-    echo "  ./go up                  # Start all services"
-    echo "  ./go down                # Stop all services"
-    echo "  ./go reset               # Reset environment (requires confirmation)"
-    echo "  ./go reset --force       # Reset without confirmation"
-    echo "  ./go version             # Show version information"
-    echo "  ./go versions            # List available versions"
-    echo "  ./go switch 0.2.1        # Switch to version 0.2.1"
-    echo "  ./go switch 0.2.1 --no-rollback  # Switch without auto-rollback"
-    echo "  ./go rollback            # Rollback to previous version"
-    echo "  ./go logs web            # Show web logs"
-    echo "  ./go health              # Check if services are healthy"
-    echo "  ./go exec api bash       # Open bash in api container"
-    echo "  ./go restart api         # Restart api service"
-    echo "  ./go cert                # Generate SSL certificates for HTTPS"
-    echo "  ./go cert-info           # View certificate details and expiry"
+    echo "  ./run.sh up                  # Start all services"
+    echo "  ./run.sh down                # Stop all services"
+    echo "  ./run.sh reset               # Reset environment (requires confirmation)"
+    echo "  ./run.sh reset --force       # Reset without confirmation"
+    echo "  ./run.sh version            # Show version information"
+    echo "  ./run.sh versions            # List available versions"
+    echo "  ./run.sh switch 0.2.1        # Switch to version 0.2.1"
+    echo "  ./run.sh switch 0.2.1 --no-rollback  # Switch without auto-rollback"
+    echo "  ./run.sh rollback            # Rollback to previous version"
+    echo "  ./run.sh logs web            # Show web logs"
+    echo "  ./run.sh health              # Check if services are healthy"
+    echo "  ./run.sh exec api bash       # Open bash in api container"
+    echo "  ./run.sh restart api         # Restart api service"
+    echo "  ./run.sh cert               # Generate SSL certificates for HTTPS"
+    echo "  ./run.sh cert-info           # View certificate details and expiry"
 }
 
 # Main script logic
@@ -1374,7 +1291,7 @@ case "$1" in
             help
         else
             echo "Unknown command: $1"
-            echo "Run './go help' for usage information"
+            echo "Run './run.sh help' for usage information"
             exit 1
         fi
         ;;
