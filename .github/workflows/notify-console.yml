@@ -26,13 +26,17 @@ jobs:
       - name: Send repository_dispatch to console
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          SUBMODULE: ${{ github.event.repository.name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
         run: |
           set -euo pipefail
           gh api repos/rediacc/console/dispatches \
             -X POST \
             -f event_type="submodule-pr-merged" \
-            -f 'client_payload[submodule]=${{ github.event.repository.name }}' \
-            -f 'client_payload[pr_number]=${{ github.event.pull_request.number }}' \
-            -f 'client_payload[merge_sha]=${{ github.event.pull_request.merge_commit_sha }}' \
-            -f 'client_payload[branch]=${{ github.event.pull_request.head.ref }}'
+            -f "client_payload[submodule]=$SUBMODULE" \
+            -f "client_payload[pr_number]=$PR_NUMBER" \
+            -f "client_payload[merge_sha]=$MERGE_SHA" \
+            -f "client_payload[branch]=$BRANCH"
           echo "Dispatched submodule-pr-merged to console"
