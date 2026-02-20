@@ -51,9 +51,9 @@ services:
       - SYSTEM_DEFAULT_TEAM_NAME=${SYSTEM_DEFAULT_TEAM_NAME}
       # CI/TEST mode (bypasses email and captcha validation)
       - CI_MODE=${CI_MODE:-false}
-      # License server configuration
-      - LICENSE_SERVER_URL=${LICENSE_SERVER_URL:-https://lic.rediacc.com}
-      - LICENSE_SERVER_API_KEY=${LICENSE_SERVER_API_KEY}
+      # Account server configuration
+      - ACCOUNT_SERVER_URL=${ACCOUNT_SERVER_URL:-https://lic.rediacc.com}
+      - ACCOUNT_SERVER_API_KEY=${ACCOUNT_SERVER_API_KEY}
       - ED25519_PUBLIC_KEY=${ED25519_PUBLIC_KEY}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
