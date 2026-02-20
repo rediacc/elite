@@ -52,7 +52,7 @@ services:
       # CI/TEST mode (bypasses email and captcha validation)
       - CI_MODE=${CI_MODE:-false}
       # Account server configuration
-      - ACCOUNT_SERVER_URL=${ACCOUNT_SERVER_URL:-https://lic.rediacc.com}
+      - ACCOUNT_SERVER_URL=${ACCOUNT_SERVER_URL:-https://account.rediacc.com}
       - ACCOUNT_SERVER_API_KEY=${ACCOUNT_SERVER_API_KEY}
       - ED25519_PUBLIC_KEY=${ED25519_PUBLIC_KEY}
     volumes:
